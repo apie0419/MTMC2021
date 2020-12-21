@@ -1,0 +1,7 @@
+PATH:
+  ROOT_PATH: "/home/apie/projects/MTMC2021/dataset"
+  INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/train"
+
+DEVICE:
+  TYPE: "cuda"
+  GPU: 1
