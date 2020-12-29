@@ -1,4 +1,4 @@
-from options import opt
+from reid_model.options import opt
 from pathlib import Path
 from .baseline import Backbone
 from torchvision import transforms
@@ -40,9 +40,9 @@ def build_transform(cfg):
 
 
 # load reid model in test
-def build_reid_model(cfg):
-    WEIGHT=cfg.REID.MODEL_PATH
-    NUM_CLASSES=cfg.REID.NUM_CLASSES
+def build_appearance_model(cfg):
+    WEIGHT=cfg.MODEL.APPEARANCE.WEIGHTS
+    NUM_CLASSES=cfg.MODEL.APPEARANCE.NUM_CLASSES
     model=make_model(NUM_CLASSES)
     checkpoint=torch.load(WEIGHT)
     model.load_state_dict(checkpoint['state_dict'])

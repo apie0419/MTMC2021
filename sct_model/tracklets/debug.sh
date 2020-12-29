@@ -1,0 +1,1 @@
+python3 tracklets/train_trackletpair_fushion.py --cfg configs/tracklet_pair_connectivity.yaml MODEL.RESUME_PATH  /mnt/cephfs_new_wj/cv/chenmingfei.lasia/TNT_pytorch/work_dirs/trackletpair_connectivity/2020-03-01-12-13/TrackletConnectivity_epoch000_iter000010_checkpoint.pth

@@ -1,0 +1,48 @@
+OUTPUT_ROOT: trackletpair_connectivity
+DIST_BACKEND: 'nccl'
+PI: 'acc'
+WORKERS: 4
+CUDNN:
+  BENCHMARK: True
+  DETERMINISTIC: False
+  ENABLED: True
+DATASET:
+  ROOT: '/home/apie/projects/MTMC2021/dataset'
+  IMG_NUM_PER_GPU: 8
+  MEAN: [102.9801, 115.9465, 122.7717]
+  STD: [1, 1, 1]
+MODEL:
+  FILE: tracklet_connectivity
+  NAME: TrackletConnectivity
+  CONNECTIVITY:
+    KERNEL_SIZE: [3, 5, 9, 13]
+    FEAT_CHANNELS: [16, 64, 128]
+    STACK_NUM: 3
+  APPEARANCE:
+    WEIGHTS: '/home/apie/projects/MTMC2021/reid_model/checkpoints/model-0.305-best_mAP.pth'
+    NUM_CLASSES: 667
+    EMB_SIZE: 2048
+TRACKLET:
+  WINDOW_lEN: 64
+TRAIN:
+  LR: 0.0001
+  LR_FACTOR: 0.1
+  WEIGHT_DECAY: 0.0005
+  LR_STEPS: [3000, 6000] 
+  MAX_ITERATIONS: 9000
+  OPTIMIZER: adam
+  RESUME: True
+  INPUT_MIN: 91
+  INPUT_MAX: 182 
+  PRINT_FREQ: 100 
+  SAVE_INTERVAL: 2000
+  SAVE_EVERY_CHECKPOINT: True
+  VAL_WHEN_TRAIN: False
+TEST:
+  TEST_SIZE: (91, 182) # min_size, max_size
+  OUT_DIR: 'output'
+
+
+
+
+

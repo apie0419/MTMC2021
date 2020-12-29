@@ -4,7 +4,7 @@ from .backbones.resnet import ResNet, BasicBlock, Bottleneck
 from .backbones.resnet_ibn_a import resnet50_ibn_a,resnet101_ibn_a
 from .backbones.se_resnet_ibn_a import se_resnet101_ibn_a
 import torch.nn.functional as F
-from options import opt
+from reid_model.options import opt
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__

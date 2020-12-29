@@ -1,9 +1,10 @@
 import argparse
 from pathlib import Path
 
-ROOTPATH="/mnt/hdd1/home/joycenerd/Vehicle-ReID"
+ROOTPATH="/home/apie/projects/MTMC2021/reid_model"
 
 parser =  argparse.ArgumentParser()
+
 # GENERAL SETTING
 parser.add_argument('--cuda-devices', type=int, default=1, help='gpu devices')
 parser.add_argument('--checkpoint-dir', type=str, default=str(Path(ROOTPATH).joinpath('checkpoints/nothing')), help='directory to save checkpoints')
@@ -28,7 +29,7 @@ parser.add_argument('--reid-model', type=str, default='resnet101_ibn_a', help='n
 parser.add_argument('--last-stride', type=int, default=1, help='last stride for reid model')
 parser.add_argument('--neck', type=str, default='bnneck', help='if reid model train with BNNeck')
 parser.add_argument('--test-neck-feat', type=str, default='after', help='Which feature of BNNeck to be used for test, before or after BNNneck, options: [before, after]')
-parser.add_argument('--pretrain-choice', type=str, default='imagenet', help='Use ImageNet pretrained model to initialize backbone or use self trained model to initialize the whole model, options: [imagenet, self]')
+parser.add_argument('--pretrain-choice', type=str, default='', help='Use ImageNet pretrained model to initialize backbone or use self trained model to initialize the whole model, options: [imagenet, self]')
 parser.add_argument('--pretrained-dir', type=str, default=str(Path(ROOTPATH).joinpath('checkpoints/pretrained_model')), help='folder which save all the pretrained model')
 parser.add_argument('--cos-layer', type=bool, default=False, help='If train with arcface loss, options:[True, False]')
 parser.add_argument('--frozen', type=int, default=-1, help='Frozen layers of backbone')
