@@ -18,7 +18,7 @@ class TrackletConnectivity(nn.Module):
         self.ks = cfg.MODEL.CONNECTIVITY.KERNEL_SIZE
         self.channels = cfg.MODEL.CONNECTIVITY.FEAT_CHANNELS
         self.stack_num = cfg.MODEL.CONNECTIVITY.STACK_NUM
-        self.window_len = cfg.TRACKLET.WINDOW_lEN
+        self.window_len = cfg.TRACKLET.WINDOW_LEN
          
         self.conv1 = nn.ModuleList([])
         for i in range(len(self.ks)):

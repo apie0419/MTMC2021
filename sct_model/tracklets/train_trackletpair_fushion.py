@@ -108,8 +108,8 @@ def main_per_worker(process_index, ngpus_per_node, args):
     lr_scheduler = get_lr_scheduler(cfg, optimizer, last_iter)
 
     transform = TNTTransform(size=(cfg.TRAIN.INPUT_MIN, cfg.TRAIN.INPUT_MAX))
-    train_dataset = TrackletpairDataset(cfg.DATASET.ROOT, transform=transform, is_train=True)
-    eval_dataset = TrackletpairDataset(cfg.DATASET.ROOT, transform=transform, is_train=False)
+    train_dataset = TrackletpairDataset(cfg.DATASET.ROOT, transform=transform, is_train=True, window_length=cfg.TRACKLET.WINDOW_LEN)
+    eval_dataset = TrackletpairDataset(cfg.DATASET.ROOT, transform=transform, is_train=False, window_length=cfg.TRACKLET.WINDOW_LEN)
 
     # distribution
     if args.distributed:

@@ -28,7 +28,7 @@ class TrackletpairDataset(Dataset):
     def __init__(self,
                  crop_data_root,
                  transform=None,
-                 window_length=64,
+                 window_length=128,
                  stride = 30,
                  is_train=True,):
 
@@ -153,6 +153,9 @@ class TrackletpairDataset(Dataset):
             if self.transform is not None:
                 img_2.append(self.transform(img))
             frame_idx = tracklet_info_2[0].index(frame_id)
+            #print (f"loc_mat: {frame_id-start_frame_id_1}")
+            #print (f"tracklet_info_2: {len(tracklet_info_2[0])}, frame_id: {frame_idx}")
+            #print (np.array(tracklet_info_2).shape)
             loc_mat[frame_id-start_frame_id_1][0] = float(tracklet_info_2[1][frame_idx])
             loc_mat[frame_id-start_frame_id_1][1] = float(tracklet_info_2[2][frame_idx])
             loc_mat[frame_id-start_frame_id_1][2] = float(tracklet_info_2[3][frame_idx]) - float(tracklet_info_2[1][frame_idx])

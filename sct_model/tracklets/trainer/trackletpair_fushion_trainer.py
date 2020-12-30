@@ -36,7 +36,7 @@ class trackletpairConnectTrainer(BaseTrainer):
 
     def _read_inputs(self, inputs):
         img_1, img_2, loc_mat, tracklet_mask_1, tracklet_mask_2, real_window_len, targets = inputs
-        tracklet_pair_features = torch.zeros(len(targets), self.cfg.TRACKLET.WINDOW_lEN, self.cfg.MODEL.APPEARANCE.EMB_SIZE).cuda(non_blocking=True)
+        tracklet_pair_features = torch.zeros(len(targets), self.cfg.TRACKLET.WINDOW_LEN, self.cfg.MODEL.APPEARANCE.EMB_SIZE).cuda(non_blocking=True)
         img_1 = [img.cuda(non_blocking=True) for img in img_1]
         img_2 = [img.cuda(non_blocking=True) for img in img_2]
         loc_mat = loc_mat.cuda(non_blocking=True)
