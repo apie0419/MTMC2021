@@ -1,10 +1,10 @@
-import cv2
+import cv2, torch
 import numpy as np
+
 from numpy import random
-
 from scipy import misc
+from torchvision import transforms
 
-import torch
 
 class Compose(object):
     """Composes several augmentations together.
@@ -226,21 +226,25 @@ class FacenetInferenceTransform(object):
         return img
 
 class TNTTransform(object):
-    def __init__(self, size=[182, 182], mean=(102.9801, 115.9465, 122.7717), std=(1.0, 1.0, 1.0)):
+    def __init__(self, size=[182, 182]):
         # BGR
-        self.mean = mean
-        self.std = std
         self.min_size, self.max_size = size
 
-        self.transform = Compose([
-            ConvertFromInts(),
-            Resize(self.min_size, self.max_size),
-            SubtractMeans(mean),
-            ToTensor(),
+        # self.transform = Compose([
+        #     ConvertFromInts(),
+        #     Resize(self.min_size, self.max_size),
+        #     SubtractMeans(mean),
+        #     ToTensor(),
+        # ])
+
+        self.transform = transforms.Compose([
+            transforms.Resize((self.min_size, self.max_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225])
         ])
 
     def __call__(self, img):
-        img, _, _ = self.transform(img)
+        img = self.transform(img)
         return img
 
 if __name__ == '__main__':

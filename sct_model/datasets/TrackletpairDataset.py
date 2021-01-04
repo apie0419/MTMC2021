@@ -3,7 +3,6 @@
 # Created by Mingfei Chen (lasiafly@gmail.com)
 # Created On: 2020-2-24
 # ------------------------------------------------------------------------------
-import cv2
 import random
 import json
 import numpy as np
@@ -14,7 +13,9 @@ import os.path as osp
 import pandas as pd
 
 import torch
+
 from torch.utils.data import Dataset
+from PIL import Image
 
 class TrackletpairDataset(Dataset):
     """get tracklet pair batch for tracklet pair connectivity training.
@@ -129,7 +130,7 @@ class TrackletpairDataset(Dataset):
             if not osp.exists(img_path):
                 logging.error("Cannot found image data: " + img_path)
                 continue
-            img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+            img = Image.open(img_path).convert('RGB')
             if self.transform is not None:
                 img_1.append(self.transform(img))
             frame_idx = tracklet_info_1[0].index(frame_id)
@@ -149,7 +150,7 @@ class TrackletpairDataset(Dataset):
             if not osp.exists(img_path):
                 logging.error("Cannot found image data: " + img_path)
                 continue
-            img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+            img = Image.open(img_path).convert('RGB')
             if self.transform is not None:
                 img_2.append(self.transform(img))
             frame_idx = tracklet_info_2[0].index(frame_id)

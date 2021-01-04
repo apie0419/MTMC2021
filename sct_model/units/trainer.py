@@ -58,7 +58,7 @@ class BaseTrainer(object):
         loss, train_prec = self.criterion(pred, targets)
         return loss, train_prec
 
-    def train(self, train_loader, eval_loader):
+    def train(self, train_loader):
         losses_1 = AverageMeter()
         losses_2 = AverageMeter()
         data_time = AverageMeter()
@@ -124,23 +124,7 @@ class BaseTrainer(object):
             
             # save checkpoint
             if self.iter > 0 and self.iter % self.cfg.TRAIN.SAVE_INTERVAL == 0:
-                # evaluation
-                if self.cfg.TRAIN.VAL_WHEN_TRAIN:
-                    self.model.eval()
-                    performance = self.evaluate(eval_loader)
-                    self.writer.add_scalar(self.PI, performance, self.iter)
-                    if self.PI == 'triplet_loss' and performance < self.best_performance:
-                        self.is_best = True
-                        self.best_performance = performance
-                    elif performance > self.best_performance:
-                        self.is_best = True
-                        self.best_performance = performance
-                    else:
-                        self.is_best = False
-                    logging.info(f'Now: best {self.PI} is {self.best_performance}')
-                else:
-                    performance = -1
-
+               
                 # save checkpoint
                 try:
                     state_dict = self.model.module.state_dict() # remove prefix of multi GPUs
@@ -156,7 +140,7 @@ class BaseTrainer(object):
                         {
                             'iter': self.iter,
                             'model': self.model_name,
-                            f'performance/{self.PI}': performance,
+                            f'performance/{self.PI}': -1,
                             'state_dict': state_dict,
                             'optimizer': self.optimizer.state_dict(),
                         },

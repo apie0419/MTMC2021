@@ -16,6 +16,7 @@ _C.OUTPUT_ROOT = ''
 _C.DIST_BACKEND = 'nccl'
 
 _C.WORKERS = 4
+_C.DEVICE = 1
 
 _C.PI = 'mAP'
 

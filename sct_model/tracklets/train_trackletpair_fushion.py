@@ -109,7 +109,6 @@ def main_per_worker(process_index, ngpus_per_node, args):
 
     transform = TNTTransform(size=(cfg.TRAIN.INPUT_MIN, cfg.TRAIN.INPUT_MAX))
     train_dataset = TrackletpairDataset(cfg.DATASET.ROOT, transform=transform, is_train=True, window_length=cfg.TRACKLET.WINDOW_LEN)
-    eval_dataset = TrackletpairDataset(cfg.DATASET.ROOT, transform=transform, is_train=False, window_length=cfg.TRACKLET.WINDOW_LEN)
 
     # distribution
     if args.distributed:
@@ -160,14 +159,6 @@ def main_per_worker(process_index, ngpus_per_node, args):
         sampler=train_sampler
     )
 
-    eval_loader = torch.utils.data.DataLoader(
-        eval_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        drop_last=False,
-        collate_fn=tracklet_pair_collect,
-        num_workers=cfg.WORKERS
-    )
     
         
     criterion = nn.CrossEntropyLoss()
@@ -186,9 +177,18 @@ def main_per_worker(process_index, ngpus_per_node, args):
     )
 
     while True:
-        Trainer.train(train_loader, eval_loader)
+        Trainer.train(train_loader)
 
     # eval
+    eval_dataset = TrackletpairDataset(cfg.DATASET.ROOT, transform=transform, is_train=False, window_length=cfg.TRACKLET.WINDOW_LEN)
+    eval_loader = torch.utils.data.DataLoader(
+        eval_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=False,
+        collate_fn=tracklet_pair_collect,
+        num_workers=cfg.WORKERS
+    )
     Trainer.evaluate(eval_loader)
 
 

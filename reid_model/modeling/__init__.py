@@ -30,11 +30,10 @@ def make_model(num_classes,pretrain_path=str(model_urls[opt.reid_model])):
 
 # data transform for test
 def build_transform(cfg):
-    normalize_transform=transforms.Normalize(mean=cfg.REID.PIXEL_MEAN,std=cfg.REID.PIXEL_STD)
     transform=transforms.Compose([
-        transforms.Resize(cfg.REID.SIZE_TEST),
+        transforms.Resize(cfg.REID.IMG_SIZE),
         transforms.ToTensor(),
-        normalize_transform
+        transforms.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225])
     ])
     return transform
 
