@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-# ------------------------------------------------------------------------------
-# Created by Mingfei Chen (lasiafly@gmail.com)
-# Created On: 2020-1-20
-# ------------------------------------------------------------------------------
 from yacs.config import CfgNode as CN
 
 INF = 1e8

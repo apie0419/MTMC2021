@@ -1,21 +1,12 @@
-# -*- coding: utf-8 -*-
-# ------------------------------------------------------------------------------
-# Created by Mingfei Chen (lasiafly@gmail.com)
-# Created On: 2020-2-29
-# ------------------------------------------------------------------------------
-# delete if not debug
-import _init_paths
-from utils.utils import load_eval_model
-from tracklets.fushion_models.tracklet_connectivity import TrackletConnectivity
+from sct_model.utils.utils import load_eval_model
+from sct_model.tracklets.fushion_models.tracklet_connectivity import TrackletConnectivity
+from sct_model.clusters.utils.trackletpair_connect import pred_connect_with_fusion
+from sct_model.clusters.utils.tracklet_connect import define_coarse_tracklet_connections
+from sct_model.clusters.utils.tracklet_connect import get_trackletpair_t_range
+from sct_model.utils.utils import write_dict_to_json
 
 import numpy as np
 import pickle
-
-from clusters.utils.trackletpair_connect import pred_connect_with_fusion
-from clusters.utils.tracklet_connect import define_coarse_tracklet_connections
-from clusters.utils.tracklet_connect import get_trackletpair_t_range
-
-from utils.utils import write_dict_to_json
 
 
 def update_neighbor(coarse_track_dict, track_set, tracklet_pair, coarse_tracklet_connects, emb_size, slide_window_len=64): 

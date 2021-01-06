@@ -33,7 +33,7 @@ class trackletpairConnectTrainer(BaseTrainer):
             performance_indicator, last_iter, rank, replace_iter, replace_model_name)
 
         self.pre_ap_model = pre_ap_model
-
+        
     def _read_inputs(self, inputs):
         img_1, img_2, loc_mat, tracklet_mask_1, tracklet_mask_2, real_window_len, targets = inputs
         tracklet_pair_features = torch.zeros(len(targets), self.cfg.TRACKLET.WINDOW_LEN, self.cfg.MODEL.APPEARANCE.EMB_SIZE).cuda(non_blocking=True)

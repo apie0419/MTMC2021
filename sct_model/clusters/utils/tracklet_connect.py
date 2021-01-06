@@ -1,9 +1,4 @@
-# -*- coding: utf-8 -*-
-# ------------------------------------------------------------------------------
-# Created by Mingfei Chen (lasiafly@gmail.com)
-# Created On: 2020-3-1
-# ------------------------------------------------------------------------------
-from tracklets.utils.pred_loc import linear_pred_v2
+from sct_model.tracklets.utils.pred_loc import linear_pred_v2
 
 import numpy as np
 

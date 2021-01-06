@@ -14,9 +14,9 @@ from bisect import bisect_right
 from functools import partial
 from six.moves import map, zip
 
-from datasets.transform import TrainTransform
-from datasets.transform import EvalTransform
-from units.losses import sigmoid_crossentropy_loss
+from sct_model.datasets.transform import TrainTransform
+from sct_model.datasets.transform import EvalTransform
+from sct_model.units.losses import sigmoid_crossentropy_loss
 
 class AverageMeter(object):
     """Computes and stores the average and current value

@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-# ------------------------------------------------------------------------------
-# Created by Mingfei Chen (lasiafly@gmail.com)
-# Created On: 2020-2-24
-# ------------------------------------------------------------------------------
 import random
 import json
 import numpy as np
@@ -175,7 +170,7 @@ class TrackletpairDataset(Dataset):
         if real_window_len < self.window_length:
             loc_mat_np[real_window_len:] = np.zeros((self.window_length-real_window_len, 4))
         loc_mat = torch.from_numpy(loc_mat_np)
-
+        
         tracklet_mask_1 = torch.from_numpy(np.array(tracklet_mask_1).astype(np.float32))
         tracklet_mask_2 = torch.from_numpy(np.array(tracklet_mask_2).astype(np.float32))
         connectivity = torch.from_numpy(np.array(int(connectivity))).type(torch.LongTensor)

@@ -1,24 +1,19 @@
-# -*- coding: utf-8 -*-
-# ------------------------------------------------------------------------------
-# Created by Mingfei Chen (lasiafly@gmail.com)
-# Created On: 2020-2-24
-# ------------------------------------------------------------------------------
 import torch
 from torch import nn
 
-from units.units import tracklet_conv2d_with_maxpool
+from sct_model.units.units import tracklet_conv2d_with_maxpool
 
 
 class TrackletConnectivity(nn.Module):
     def __init__(self, cfg, drop_prob=0.25):
 
         super().__init__()
-        assert len(cfg.MODEL.CONNECTIVITY.FEAT_CHANNELS) == cfg.MODEL.CONNECTIVITY.STACK_NUM
+        assert len(cfg.SCT.FEAT_CHANNELS) == cfg.SCT.STACK_NUM
 
-        self.ks = cfg.MODEL.CONNECTIVITY.KERNEL_SIZE
-        self.channels = cfg.MODEL.CONNECTIVITY.FEAT_CHANNELS
-        self.stack_num = cfg.MODEL.CONNECTIVITY.STACK_NUM
-        self.window_len = cfg.TRACKLET.WINDOW_LEN
+        self.ks = cfg.SCT.KERNEL_SIZE
+        self.channels = cfg.SCT.FEAT_CHANNELS
+        self.stack_num = cfg.SCT.STACK_NUM
+        self.window_len = cfg.SCT.WINDOW_LEN
          
         self.conv1 = nn.ModuleList([])
         for i in range(len(self.ks)):

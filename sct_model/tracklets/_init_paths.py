@@ -9,7 +9,6 @@ def add_path(path):
 
 this_dir = osp.dirname(__file__)
 
-
 project_path = osp.dirname(this_dir)
 dataset_path = osp.join(project_path, 'datasets')
 model_path = osp.join(project_path, 'tracklets', 'fushion_models')

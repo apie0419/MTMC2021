@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-# ------------------------------------------------------------------------------
-# Created by Mingfei Chen (lasiafly@gmail.com)
-# Created On: 2020-2-24
-# ------------------------------------------------------------------------------
 import os, sys
 import importlib
 
@@ -199,7 +194,7 @@ if __name__ == '__main__':
     ngpus_per_node = 1
     print(f"Using {ngpus_per_node} gpus in machine {args.rank}")
     print(f"Distributed training = {args.distributed}")
-
+    
     if args.distributed:
         args.world_size = ngpus_per_node * args.world_size
         torch.multiprocessing.spawn(
@@ -207,6 +202,7 @@ if __name__ == '__main__':
             args=(ngpus_per_node, args),
             nprocs=ngpus_per_node
         )
+        
     else:
         assert args.rank == 0, ('if you do not use distributed training, '
                                 'machine rank must be set to 0')
@@ -215,3 +211,5 @@ if __name__ == '__main__':
             ngpus_per_node,
             args,
         )
+
+        
