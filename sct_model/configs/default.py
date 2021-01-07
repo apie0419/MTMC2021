@@ -1,4 +1,7 @@
 from yacs.config import CfgNode as CN
+import os
+
+BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 INF = 1e8
 
@@ -172,15 +175,7 @@ _C.TEST.PR_CURVE = False
 _C.TEST.OUT_DIR = ''
 _C.TEST.AP_IOU = 0.5
 
-
-def update_config(config, args):
-    config.defrost()
-    # set cfg using yaml config file
-    config.merge_from_file(args.yaml_file)
-    # update cfg using args
-    config.merge_from_list(args.opts)
-    config.freeze()
-
+config.merge_from_file(os.path.join(BASE_PATH, "tracklet_pair_connectivity.yaml"))
 
 if __name__ == '__main__':
     import sys

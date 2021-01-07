@@ -27,19 +27,10 @@ from utils.utils import get_lr_scheduler
 from utils.utils import load_checkpoint
 from utils.utils import load_eval_model
 
-sys.path.append("../..")
-
 from reid_model.modeling import build_appearance_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Appearance embedding extraction.')
-    parser.add_argument(
-        '--cfg',
-        dest='yaml_file',
-        default="/home/apie/projects/MTMC2021/sct_model/configs/tracklet_pair_connectivity.yaml",
-        help='experiment configure file name, e.g. configs/facenet_triplet_appearance.yaml',
-        required=False,
-        type=str)
     
     # default distributed training
     parser.add_argument(
@@ -76,8 +67,6 @@ def parse_args():
 
 
 def main_per_worker(process_index, ngpus_per_node, args):
-    update_config(cfg, args)
-    
     # torch seed
     torch.cuda.manual_seed(random.random())
 
