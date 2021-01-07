@@ -1,7 +1,9 @@
 import numpy as np
-import os, cv2, sys
+import os, cv2
 
-sys.path.append("..")
+from utils import init_path
+
+init_path()
 
 from config import cfg
 

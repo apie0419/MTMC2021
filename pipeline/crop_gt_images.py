@@ -1,10 +1,11 @@
 import numpy as np
-import cv2, os, sys, json
+import cv2, os, json
 
-sys.path.append("..") 
+from utils import init_path
+
+init_path()
 
 from config import cfg
-
 
 def crop(fnum, frame, boxes, ids, img_path, data):
     idx = 0

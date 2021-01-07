@@ -5,8 +5,9 @@ from tqdm       import tqdm
 from PIL        import Image
 from utils.sct  import build_model
 from utils.reid import build_transform
+from utils                                  import init_path
 
-sys.path.append("..")
+init_path()
 
 from config                                 import cfg
 from sct_model.clusters.init_cluster        import init_clustering
@@ -27,7 +28,7 @@ def read_feature_file(file_path, transform):
     det_result = dict()
     crop_imgs = dict()
     
-    for line in tqdm(f.readlines(), desc="Reading feature file"):
+    for line in tqdm(f.readlines(), desc="Reading feature files"):
         feature_list = line.strip("\n").split(",")
         img_name = feature_list[0]
         frame_id = int(feature_list[1])

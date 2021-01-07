@@ -1,11 +1,17 @@
-import torch, sys, os, re
+import torch, sys, os, re, time
+import torch.multiprocessing as mp
+
 from torch.utils.data import DataLoader, Dataset
 from PIL              import Image
+from tqdm             import tqdm 
 from utils.reid       import build_transform, build_model
+from utils            import init_path
 
-sys.path.append("..")
+init_path()
 
 from config import cfg
+
+
 
 INPUT_DIR     = cfg.PATH.INPUT_PATH
 DEVICE        = cfg.DEVICE.TYPE
@@ -13,7 +19,6 @@ DEVICE        = cfg.DEVICE.TYPE
 if DEVICE == "cuda":
     torch.cuda.set_device(cfg.DEVICE.GPU)
 
-NUM_WORKERS   = 8
 IMS_PER_BATCH = 64
 
 class ImageDataset(Dataset):
@@ -60,9 +65,9 @@ def read_gps_features_file(file):
     return results
 
 def _process_data():
-    imgs = list()
-    gps_features = dict()
-    for scene_dir in os.listdir(INPUT_DIR):
+    data_queue = mp.Queue()
+    max_task_num = 0
+    for scene_dir in tqdm(os.listdir(INPUT_DIR), desc="Loading Data"):
         if not scene_dir.startswith("S0"):
             continue
         for camera_dir in os.listdir(os.path.join(INPUT_DIR, scene_dir)):
@@ -74,38 +79,56 @@ def _process_data():
 
             data_dir = os.path.join(INPUT_DIR, scene_dir, camera_dir, "cropped_images")
             img_list = os.listdir(data_dir)
-            imgs.extend([os.path.join(data_dir, img) for img in img_list])
+            imgs = [os.path.join(data_dir, img) for img in img_list]
+            max_task_num += int(len(imgs)/IMS_PER_BATCH) + 1
             gps_feature_file = os.path.join(INPUT_DIR, scene_dir, camera_dir, "det_gps_feature.txt")
-            gps_feat = read_gps_features_file(gps_feature_file)
-            gps_features.update(gps_feat)
+            gps_features = read_gps_features_file(gps_feature_file)
+            data_queue.put([imgs, gps_features])
+            
 
-    return imgs, gps_features
+    return data_queue, max_task_num
 
-def _inference(model, data_loader, gps_features):
-    model.eval()
-    with torch.no_grad():
-        for data, paths in data_loader:
-            data = data.cuda()
-            feat = model(data)
-            for i,p in enumerate(paths):
-                scene_dir = re.search(r"S([0-9]){2}", p).group(0)
-                camera_dir = re.search(r"c([0-9]){3}", p).group(0)
-                path = os.path.join(INPUT_DIR, scene_dir, camera_dir)
-                
-                with open(os.path.join(path, f'all_features.txt'), 'a+') as f:
-                    img_name = p.split('/')[-1]
-                    gps_feat = gps_features[img_name]
-                    print(path + "/" + img_name)
-                    reid_feat = list(feat[i].cpu().numpy())
-                    reid_feat_str = str(reid_feat)[1:-1].replace(" ", "")
-                    line = img_name + "," + gps_feat + "," + reid_feat_str + "\n"
-                    f.write(line)
-    
+def _inference(model, data_queue, finish):
+    while not data_queue.empty():
+        imgs, gps_features = data_queue.get()
+        transforms = build_transform(cfg)
+        dataset = ImageDataset(imgs, transforms)
+        dataloader = DataLoader(dataset, batch_size=IMS_PER_BATCH, shuffle=False, num_workers=cfg.NUM_WORKERS, collate_fn=collate_fn)
+        with torch.no_grad():
+            for data, paths in dataloader:
+                data = data.cuda()
+                feat = model(data)
+                for i,p in enumerate(paths):
+                    scene_dir = re.search(r"S([0-9]){2}", p).group(0)
+                    camera_dir = re.search(r"c([0-9]){3}", p).group(0)
+                    path = os.path.join(INPUT_DIR, scene_dir, camera_dir)
+                    
+                    with open(os.path.join(path, f'all_features.txt'), 'a+') as f:
+                        img_name = p.split('/')[-1]
+                        gps_feat = gps_features[img_name]
+                        reid_feat = list(feat[i].cpu().numpy())
+                        reid_feat_str = str(reid_feat)[1:-1].replace(" ", "")
+                        line = img_name + "," + gps_feat + "," + reid_feat_str + "\n"
+                        f.write(line)
+                finish.value += 1
+
 if __name__ == "__main__":
-    imgs, gps_features = _process_data()
-    transforms = build_transform(cfg)
+    mp.set_start_method("spawn")
     model = build_model(cfg)
     model = model.to(DEVICE)
-    dataset = ImageDataset(imgs, transforms)
-    dataloader = DataLoader(dataset, batch_size=IMS_PER_BATCH, shuffle=False, num_workers=NUM_WORKERS, collate_fn=collate_fn)
-    _inference(model, dataloader, gps_features)
+    model = model.eval()
+    data_queue, max_task_num = _process_data()
+    finish = mp.Value('i', 0)
+    
+    for i in range(cfg.NUM_WORKERS):
+        p = mp.Process(target=_inference, args=(model, data_queue, finish))
+        p.start()
+    
+    for i in tqdm(range(max_task_num), desc="Extracting Features"):
+        while i == finish.value:
+            time.sleep(0.5)
+
+    data_queue.close()
+    data_queue.join_thread()
+        
+    

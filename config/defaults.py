@@ -8,9 +8,10 @@ _C.PATH = CN()
 _C.DEVICE = CN()
 _C.REID = CN()
 _C.SCT = CN()
+_C.NUM_WORKERS = 4
 
 _C.PATH.ROOT_PATH = '<path_project_dir>'
-_C.PATH.INPUT_PATH = '<path_to_input_path>' # train or test
+_C.PATH.INPUT_PATH = '<path_to_input_path>' # train or validation or test
 
 _C.DEVICE.GPU = 1 # gpu number
 _C.DEVICE.TYPE = "<cuda or cpu>"

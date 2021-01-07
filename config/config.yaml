@@ -1,10 +1,12 @@
+NUM_WORKERS: 4
+
 PATH:
   ROOT_PATH: "/home/apie/projects/MTMC2021/dataset"
-  INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/train"
+  INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/validation"
 
 DEVICE:
   TYPE: "cuda"
-  GPU: 1
+  GPU: 4
 
 REID:
   WEIGHTS: "/home/apie/projects/MTMC2021/reid_model/checkpoints/model-0.305-best_mAP.pth"
@@ -13,7 +15,7 @@ REID:
   EMB_SIZE: 2048
 
 SCT:
-  WEIGHTS: "/home/apie/projects/MTMC2021/sct_model/tracklets/work_dirs/trackletpair_connectivity/2021-01-05-02-45/TrackletConnectivity_epoch003_iter024000_checkpoint.pth"
+  WEIGHTS: "/home/apie/projects/MTMC2021/sct_model/tracklets/work_dirs/trackletpair_connectivity/best_model/TrackletConnectivity_epoch003_iter024000_checkpoint.pth"
   KERNEL_SIZE: [3, 5, 9, 13]
   FEAT_CHANNELS: [16, 64, 128]
   STACK_NUM: 3

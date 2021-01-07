@@ -6,7 +6,7 @@ ROOTPATH="/home/apie/projects/MTMC2021/reid_model"
 parser =  argparse.ArgumentParser()
 
 # GENERAL SETTING
-parser.add_argument('--cuda-devices', type=int, default=1, help='gpu devices')
+parser.add_argument('--cuda-devices', type=int, default=4, help='gpu devices')
 parser.add_argument('--checkpoint-dir', type=str, default=str(Path(ROOTPATH).joinpath('checkpoints/nothing')), help='directory to save checkpoints')
 parser.add_argument('--raw-data-path', type=str, default=str(Path(ROOTPATH).joinpath('Data','AIC20_track3_MTMC')), help='Path of original AICITY data')
 parser.add_argument('--data-root', type=str, default=str(Path(ROOTPATH).joinpath('Data')), help='Data root path')

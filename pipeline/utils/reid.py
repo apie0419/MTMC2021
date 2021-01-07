@@ -1,6 +1,8 @@
-import sys, torch
+import torch
 
-sys.path.append("..")
+from . import init_path
+
+init_path()
 
 from reid_model.modeling import make_model, build_transform
 
