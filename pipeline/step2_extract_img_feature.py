@@ -11,8 +11,6 @@ init_path()
 
 from config import cfg
 
-
-
 INPUT_DIR     = cfg.PATH.INPUT_PATH
 DEVICE        = cfg.DEVICE.TYPE
 
@@ -55,7 +53,7 @@ def collate_fn(batch):
     imgs, path = zip(*batch)
     return torch.stack(imgs, dim=0), path
 
-def read_gps_features_file(file):
+def read_det_features_file(file):
     f = open(file, "r")
     results = dict()
     for line in f.readlines():
@@ -81,16 +79,16 @@ def _process_data():
             img_list = os.listdir(data_dir)
             imgs = [os.path.join(data_dir, img) for img in img_list]
             max_task_num += int(len(imgs)/IMS_PER_BATCH) + 1
-            gps_feature_file = os.path.join(INPUT_DIR, scene_dir, camera_dir, "det_gps_feature.txt")
-            gps_features = read_gps_features_file(gps_feature_file)
-            data_queue.put([imgs, gps_features])
+            det_feature_file = os.path.join(INPUT_DIR, scene_dir, camera_dir, "det_feature.txt")
+            det_features = read_det_features_file(det_feature_file)
+            data_queue.put([imgs, det_features])
             
 
     return data_queue, max_task_num
 
 def _inference(model, data_queue, finish):
     while not data_queue.empty():
-        imgs, gps_features = data_queue.get()
+        imgs, det_features = data_queue.get()
         transforms = build_transform(cfg)
         dataset = ImageDataset(imgs, transforms)
         dataloader = DataLoader(dataset, batch_size=IMS_PER_BATCH, shuffle=False, num_workers=cfg.NUM_WORKERS, collate_fn=collate_fn)
@@ -105,10 +103,10 @@ def _inference(model, data_queue, finish):
                     
                     with open(os.path.join(path, f'all_features.txt'), 'a+') as f:
                         img_name = p.split('/')[-1]
-                        gps_feat = gps_features[img_name]
+                        det_feat = det_features[img_name]
                         reid_feat = list(feat[i].cpu().numpy())
                         reid_feat_str = str(reid_feat)[1:-1].replace(" ", "")
-                        line = img_name + "," + gps_feat + "," + reid_feat_str + "\n"
+                        line = img_name + "," + det_feat + "," + reid_feat_str + "\n"
                         f.write(line)
                 finish.value += 1
 
@@ -117,9 +115,11 @@ if __name__ == "__main__":
     model = build_model(cfg)
     model = model.to(DEVICE)
     model = model.eval()
+    model.share_memory()
     data_queue, max_task_num = _process_data()
     finish = mp.Value('i', 0)
     
+    print (f"Create {cfg.NUM_WORKERS} processes.")
     for i in range(cfg.NUM_WORKERS):
         p = mp.Process(target=_inference, args=(model, data_queue, finish))
         p.start()
@@ -130,5 +130,3 @@ if __name__ == "__main__":
 
     data_queue.close()
     data_queue.join_thread()
-        
-    

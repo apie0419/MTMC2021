@@ -80,13 +80,13 @@ def update_neighbor(coarse_track_dict, track_set, tracklet_pair, coarse_tracklet
 
 # add in config: time_dist_tresh, time_margin, time_cluster_dist, track_overlap_thresh, \
 # search_radius, clip_len, slide_window_len, cost_bias, refine_track_set
-def init_clustering(model, coarse_track_dict, remove_set=[], time_dist_tresh=11, time_margin=3, time_cluster_dist=24,
+def init_clustering(model, coarse_track_dict, emb_size, remove_set=[], time_dist_tresh=11, time_margin=3, time_cluster_dist=24,
                     track_overlap_thresh=0.45, search_radius=1, clip_len=6, slide_window_len=64, cost_bias=0, refine_track_set=None):
     """init time clusters and track clusters based on coarse_track_dict.
        
        Args: 
            coarse_track_dict <dict> {
-               track_id <int>: <np.array>, (total_frame_num, emb_size+4+1)
+               track_id <int>: <np.array>, (total_frame_num, emb_size+4)
             },
             remove_set: set of track_ids to be ignored because of not qualified.
             time_dist_tresh: .
@@ -101,7 +101,6 @@ def init_clustering(model, coarse_track_dict, remove_set=[], time_dist_tresh=11,
 
     """
     frame_num, feat_size = coarse_track_dict[0].shape
-    emb_size = feat_size - 4 - 1
 
     track_num = len(coarse_track_dict)
 

@@ -21,7 +21,7 @@ DEVICE        = cfg.DEVICE.TYPE
 if DEVICE == "cuda":
     torch.cuda.set_device(cfg.DEVICE.GPU)
 
-def read_feature_file(file_path, transform):
+def read_feature_file(file_path):
     
     root_path = "/".join(file_path.split("/")[:-1])
     f = open(file_path, "r")
@@ -36,20 +36,16 @@ def read_feature_file(file_path, transform):
             det_result[frame_id] = list()
             crop_imgs[frame_id] = list()
         tmp_result = list()
-        box = feature_list[3:7]
-        gps = feature_list[9:11]
+        box = feature_list[2:6]
         emb = feature_list[11:]
         id = len(det_result[frame_id])
         tmp_result.extend(emb)
         tmp_result.extend(box)
-        tmp_result.extend(gps)
         tmp_result.append(id)
         tmp_result = np.array(tmp_result).astype(np.float)
         img_path = os.path.join(root_path, "cropped_images", img_name)
-        img = Image.open(img_path).convert('RGB')
-        img = transform(img)
         det_result[frame_id].append(tmp_result)
-        crop_imgs[frame_id].append(img.numpy())
+        crop_imgs[frame_id].append(img_path)
     
     for key in det_result.keys():
         det_result[key] = np.array(det_result[key])
@@ -62,11 +58,11 @@ def main(working_path, model, transform):
         os.remove(sct_file)
     f_track = open(sct_file, "a+")
     feature_file = os.path.join(working_path, "all_features.txt")
-    det_result, crop_im = read_feature_file(feature_file, transform)
+    det_result, crop_im = read_feature_file(feature_file)
 
-    coarse_track_dict = merge_det(det_result, crop_im)
+    coarse_track_dict = merge_det(det_result, crop_im, cfg.REID.EMB_SIZE, transform)
 
-    cluster_dict, tracklet_time_range, coarse_tracklet_connects, tracklet_cost_dict = init_clustering(model, coarse_track_dict)
+    cluster_dict, tracklet_time_range, coarse_tracklet_connects, tracklet_cost_dict = init_clustering(model, coarse_track_dict, cfg.REID.EMB_SIZE)
 
     min_cost, cluster_list = get_optimal_spfa(coarse_tracklet_connects, tracklet_cost_dict)
 

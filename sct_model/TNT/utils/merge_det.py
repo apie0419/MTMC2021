@@ -27,12 +27,12 @@ def bbox_associate(overlap_mat, IOU_thresh):
     return idx1, idx2 # start from 0
 
 # wait to add in cfg: linear_pred_thresh, coeff_norm_thresh, pred_loc_iou_tresh, pred_use_F
-def merge_det(det_dict, crop_im, linear_pred_thresh=5, coeff_norm_thresh=0.5, pred_loc_iou_tresh=0.4, pred_F_mat=None):
+def merge_det(det_dict, crop_im, emb_size, transform, linear_pred_thresh=5, coeff_norm_thresh=0.5, pred_loc_iou_tresh=0.4, pred_F_mat=None):
     """merge det from the neighbour frame (based on frame_dist limitation) using emb_dist(?)
     
     Args:
         det_dict{
-            'frame_id': (obj_num, emb_size+4+1+1), for one obj_det in one frame_id [img_emb(512) x y w h label crop_index(array(1))], np.array
+            'frame_id': (obj_num, emb_size+4+1), for one obj_det in one frame_id [img_emb(512) x y w h label crop_index(array(1))], np.array
         }
         crop_im{
             'frame_id': (obj_num, crop_min, crop_max, 3)
@@ -44,7 +44,7 @@ def merge_det(det_dict, crop_im, linear_pred_thresh=5, coeff_norm_thresh=0.5, pr
         
     Return:
         track_dict{
-            'track_id': (frame_num, emb_size+4+1), for one frame_num in one track_id [img_emb(512) x y w h label], np.array
+            'track_id': (frame_num, emb_size+4), for one frame_num in one track_id [img_emb(512) x y w h label], np.array
         }
 
     frame_id, track_id both start from 0, <int> type.
@@ -56,8 +56,7 @@ def merge_det(det_dict, crop_im, linear_pred_thresh=5, coeff_norm_thresh=0.5, pr
     min_frame = min(list([int(id) for id in det_dict.keys()]))
     now_obj_num, feat_size = det_dict[min_frame].shape
     feat_size -= 1
-    emb_size = feat_size - 4 - 2
-
+    
     # init tracklet using the first frame
     new_track_id = []
     max_track_id = -1
@@ -136,7 +135,13 @@ def merge_det(det_dict, crop_im, linear_pred_thresh=5, coeff_norm_thresh=0.5, pr
         color_dist = np.zeros((pre_obj_num, now_obj_num))
         for n1 in range(pre_obj_num):
             for n2 in range(now_obj_num):
-                color_dist[n1, n2] = np.sum(crop_im[i-1][crop_id_1[n1]] * crop_im[i][crop_id_2[n2]])
+                n1_img_path = crop_im[i-1][crop_id_1[n1]
+                n1_img = Image.open(n1_img_path).convert('RGB')
+                n1_img = transform(n1_img)
+                n2_img_path = crop_im[i][crop_id_2[n2]]
+                n2_img = Image.open(n2_img_path).convert('RGB')
+                n2_img = transform(n2_img)
+                color_dist[n1, n2] = np.sum(n1_img * n2_img)
         
         if np.isnan(np.sum(color_dist)) or np.isnan(np.sum(overlap_mat)):
             raise Exception('Invalid Color Dist or Overlap Mat!')

@@ -1,6 +1,8 @@
 import numpy as np
-import os, cv2
+import os, cv2, time
+import multiprocessing as mp
 
+from tqdm  import tqdm
 from utils import init_path
 
 init_path()
@@ -15,18 +17,6 @@ PAD_SIZE = 10
 IOU_TH = 0.7
 W_PAD = 0
 H_PAD = 0
-
-def analysis_transfrom_mat(cali_path):
-    first_line = open(cali_path).readlines()[0].strip('\r\n')
-    cols = first_line.lstrip('Homography matrix: ').split(';')
-    transfrom_mat = np.ones((3, 3))
-    for i in range(3):
-        values_string = cols[i].split()
-        for j in range(3):
-            value = float(values_string[j])
-            transfrom_mat[i][j] = value
-    inv_transfrom_mat = np.linalg.inv(transfrom_mat)
-    return inv_transfrom_mat
 
 
 def compute_iou(box1, box2):
@@ -116,12 +106,6 @@ def prewhiten(x):
     y = np.multiply(np.subtract(x, mean), 1/std_adj)
     return y
 
-
-def get_num_frames(video_path):
-    cap = cv2.VideoCapture(video_path)
-    return int(cap.get(7))
-
-
 def _crop(img):
     height, width, _ = img.shape
     shorter = min(height, width)
@@ -155,49 +139,51 @@ def preprocess_boxes(src_boxes, roi):
                 boxes.append(src_b)
     return boxes
 
-
-def main():
-    IMAGE_COUNT = 0
-
+def prepare_data():
     scene_dirs = []
     scene_fds = os.listdir(INPUT_PATH)
+    max_task_num = 0
+    data_queue = mp.Queue()
     for scene_fd in scene_fds:
         if scene_fd.startswith("S0"):
             scene_dirs.append(os.path.join(INPUT_PATH, scene_fd))
 
     for scene_dir in scene_dirs:
-        camera_dirs = []
         fds = os.listdir(scene_dir)
         for fd in fds:
             if fd.startswith('c0'):
-                camera_dirs.append(os.path.join(scene_dir, fd))
-        for camera_dir in camera_dirs:
-            print(camera_dir)
+                camera_dir = os.path.join(scene_dir, fd)
+                video_path = os.path.join(camera_dir, 'vdo.avi')
+                cap = cv2.VideoCapture(video_path)
+                max_task_num += int(cap.get(7))
+                data_queue.put(camera_dir)
 
-            video_path = os.path.join(camera_dir, 'vdo.avi')
-            det_path = os.path.join(camera_dir, 'det/det_mask_rcnn.txt')
-            out_path = os.path.join(camera_dir, 'det_gps_feature.txt')
-            roi_path = os.path.join(camera_dir, 'roi.jpg')
-            cali_path = os.path.join(camera_dir, 'calibration.txt')
-            img_path = os.path.join(camera_dir, "cropped_images")
-            if not os.path.exists(img_path):
-                os.makedirs(img_path, exist_ok=True)
+    return data_queue, max_task_num
 
-            frame_dict = analysis_to_frame_dict(det_path)
-            out_f = open(out_path, 'w')
+def main(data_queue, finish):
+    IMAGE_COUNT = 0
 
-            trans_mat = analysis_transfrom_mat(cali_path)
-            roi_src = cv2.imread(roi_path)
-            roi = preprocess_roi(roi_src)
-            cap = cv2.VideoCapture(video_path)
-            all_frames = get_num_frames(video_path)
+    while not data_queue.empty():
+        camera_dir = data_queue.get()
+        video_path = os.path.join(camera_dir, 'vdo.avi')
+        det_path = os.path.join(camera_dir, 'det/det_mask_rcnn.txt')
+        out_path = os.path.join(camera_dir, 'det_feature.txt')
+        roi_path = os.path.join(camera_dir, 'roi.jpg')
+        img_path = os.path.join(camera_dir, "cropped_images")
+        if not os.path.exists(img_path):
+            os.makedirs(img_path, exist_ok=True)
 
+        frame_dict = analysis_to_frame_dict(det_path)
+        roi_src = cv2.imread(roi_path)
+        roi = preprocess_roi(roi_src)
+        cap = cv2.VideoCapture(video_path)
+        all_frames = int(cap.get(7))
+        with open(out_path, 'w') as out_f:
             for i in range(0, all_frames):
                 cap.set(cv2.CAP_PROP_POS_FRAMES, i)
                 ret, frame = cap.read()
                 if not ret:
                     break
-                
                 tmp_i = i + 1
                 if tmp_i in frame_dict:
                     src_boxes = frame_dict[tmp_i]
@@ -205,16 +191,10 @@ def main():
 
                     for det_box in boxes:
                         if det_box.box[2] < 50 or det_box.box[3] < 50:
+                            finish.value += 1
                             continue
 
                         box = det_box.box
-                        score = det_box.score
-
-                        # GET GPS coor
-                        coor = det_box.center
-                        image_coor = [coor[0], coor[1], 1]
-                        GPS_coor = np.dot(trans_mat, image_coor)
-                        GPS_coor = GPS_coor / GPS_coor[2]
 
                         cropped_img = frame[box[1]:box[1] + box[3], box[0]:box[0] + box[2]]
                         img_name = str(IMAGE_COUNT).zfill(10) + '.jpg'
@@ -222,14 +202,25 @@ def main():
                         out_path = os.path.join(camera_dir, "cropped_images", img_name)
                         cv2.imwrite(out_path, cropped_img)
 
-                        ww = img_name + ',' + str(tmp_i) + ',-1,' + str(box[0]) + ',' + str(box[1]) + ',' + \
-                             str(box[2]) + ',' + str(box[3]) + ',' + str(score) + ',-1,' + str(GPS_coor[0]) + ',' + str(
-                            GPS_coor[1])
+                        ww = img_name + ',' + str(tmp_i) + ',' + str(box[0]) + ',' + str(box[1]) + ',' + \
+                                str(box[2]) + ',' + str(box[3])
                         ww += '\n'
                         out_f.write(ww)
-
-            out_f.close()
+                finish.value += 1
 
 
 if __name__ == '__main__':
-    main()
+    data_queue, max_task_num = prepare_data()
+    finish = mp.Value('i', 0)
+    
+    print (f"Create {cfg.NUM_WORKERS} processes.")
+    for i in range(cfg.NUM_WORKERS):
+        p = mp.Process(target=main, args=(data_queue, finish))
+        p.start()
+    
+    for i in tqdm(range(max_task_num), desc="Cropping Car Images"):
+        while i == finish.value:
+            time.sleep(0.5)
+
+    data_queue.close()
+    data_queue.join_thread()
