@@ -16,11 +16,15 @@ check_setting(cfg)
 
 INPUT_DIR     = cfg.PATH.INPUT_PATH
 DEVICE        = cfg.DEVICE.TYPE
+GPU           = cfg.DEVICE.GPU
+NUM_WORKERS   = 4
+IMS_PER_BATCH = 64
+device        = None
 
 if DEVICE == "cuda":
-    torch.cuda.set_device(cfg.DEVICE.GPU)
-
-IMS_PER_BATCH = 64
+    device = torch.device(DEVICE + ':' + str(GPU))
+elif DEVICE == "cpu":
+    device = torch.device(DEVICE)
 
 class ImageDataset(Dataset):
 
@@ -64,7 +68,7 @@ def read_det_features_file(file):
         frame_id = l[0]
         id = l[1]
         box = ",".join(l[2:])
-        results[frame_id + '_' + id] = ",".join(l[1:])
+        results[frame_id + '_' + id] = box
     
     return results
 
@@ -84,7 +88,7 @@ def prepare_data():
     data_queue = mp.Queue()
     max_task_num = 0
     for scene_dir in tqdm(os.listdir(INPUT_DIR), desc="Loading Data"):
-        if not scene_dir.startswith("S0"):
+        if not scene_dir.startswith("S01"):
             continue
         for camera_dir in os.listdir(os.path.join(INPUT_DIR, scene_dir)):
             if not camera_dir.startswith("c0"):
@@ -107,14 +111,16 @@ def prepare_data():
     return data_queue, max_task_num
 
 def main(model, data_queue, finish):
+    
     while not data_queue.empty():
         imgs, det_features, trans_mat = data_queue.get()
         transforms = build_transform(cfg)
         dataset = ImageDataset(imgs, transforms)
-        dataloader = DataLoader(dataset, batch_size=IMS_PER_BATCH, shuffle=False, num_workers=cfg.NUM_WORKERS, collate_fn=collate_fn)
+        dataloader = DataLoader(dataset, batch_size=IMS_PER_BATCH, shuffle=False, num_workers=NUM_WORKERS, collate_fn=collate_fn)
         with torch.no_grad():
             for data, paths in dataloader:
-                data = data.cuda()
+                
+                data = data.to(device)
                 feat = model(data)
                 for i,p in enumerate(paths):
                     scene_dir = re.search(r"S([0-9]){2}", p).group(0)
@@ -139,20 +145,20 @@ def main(model, data_queue, finish):
 if __name__ == "__main__":
     mp.set_start_method("spawn")
     model = build_model(cfg)
-    model = model.to(DEVICE)
+    model.to(device)
     model = model.eval()
     model.share_memory()
     data_queue, max_task_num = prepare_data()
     finish = mp.Value('i', 0)
     
-    print (f"Create {cfg.NUM_WORKERS} processes.")
-    for i in range(cfg.NUM_WORKERS):
+    print (f"Create {NUM_WORKERS} processes.")
+    for i in range(NUM_WORKERS):
         p = mp.Process(target=main, args=(model, data_queue, finish))
         p.start()
     
     for i in tqdm(range(max_task_num), desc="Extracting Features"):
         while i == finish.value:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
     data_queue.close()
     data_queue.join_thread()

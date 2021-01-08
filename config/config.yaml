@@ -1,5 +1,3 @@
-NUM_WORKERS: 4
-
 PATH:
   ROOT_PATH: "/home/apie/projects/MTMC2021/dataset"
   INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/train"
@@ -13,6 +11,7 @@ REID:
   NUM_CLASSES: 667
   IMG_SIZE: [224, 224]
   EMB_SIZE: 2048
+  BATCH_SIZE: 64
 
 DETECTION: "mask_rcnn"
 SCT: "tc"
