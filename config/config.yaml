@@ -2,7 +2,7 @@ NUM_WORKERS: 4
 
 PATH:
   ROOT_PATH: "/home/apie/projects/MTMC2021/dataset"
-  INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/validation"
+  INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/train"
 
 DEVICE:
   TYPE: "cuda"
@@ -14,9 +14,5 @@ REID:
   IMG_SIZE: [224, 224]
   EMB_SIZE: 2048
 
-SCT:
-  WEIGHTS: "/home/apie/projects/MTMC2021/sct_model/tracklets/work_dirs/trackletpair_connectivity/best_model/TrackletConnectivity_epoch003_iter024000_checkpoint.pth"
-  KERNEL_SIZE: [3, 5, 9, 13]
-  FEAT_CHANNELS: [16, 64, 128]
-  STACK_NUM: 3
-  WINDOW_LEN: 128
+DETECTION: "mask_rcnn"
+SCT: "tc"

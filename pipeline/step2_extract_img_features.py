@@ -1,15 +1,18 @@
-import torch, sys, os, re, time
+import torch, os, re, time
 import torch.multiprocessing as mp
+import numpy as np
 
 from torch.utils.data import DataLoader, Dataset
 from PIL              import Image
 from tqdm             import tqdm 
 from utils.reid       import build_transform, build_model
-from utils            import init_path
+from utils            import init_path, check_setting
 
 init_path()
 
 from config import cfg
+
+check_setting(cfg)
 
 INPUT_DIR     = cfg.PATH.INPUT_PATH
 DEVICE        = cfg.DEVICE.TYPE
@@ -58,11 +61,26 @@ def read_det_features_file(file):
     results = dict()
     for line in f.readlines():
         l = line.strip("\n").split(",")
-        results[l[0]] = ",".join(l[1:])
+        frame_id = l[0]
+        id = l[1]
+        box = ",".join(l[2:])
+        results[frame_id + '_' + id] = ",".join(l[1:])
     
     return results
 
-def _process_data():
+def analysis_transfrom_mat(cali_path):
+    first_line = open(cali_path).readlines()[0].strip('\r\n')
+    cols = first_line.lstrip('Homography matrix: ').split(';')
+    transfrom_mat = np.ones((3, 3))
+    for i in range(3):
+        values_string = cols[i].split()
+        for j in range(3):
+            value = float(values_string[j])
+            transfrom_mat[i][j] = value
+    inv_transfrom_mat = np.linalg.inv(transfrom_mat)
+    return inv_transfrom_mat
+
+def prepare_data():
     data_queue = mp.Queue()
     max_task_num = 0
     for scene_dir in tqdm(os.listdir(INPUT_DIR), desc="Loading Data"):
@@ -75,20 +93,22 @@ def _process_data():
             if os.path.exists(feature_file):
                 os.remove(feature_file)
 
-            data_dir = os.path.join(INPUT_DIR, scene_dir, camera_dir, "cropped_images")
+            cali_path = os.path.join(INPUT_DIR, scene_dir, camera_dir, 'calibration.txt')
+            trans_mat = analysis_transfrom_mat(cali_path)
+            data_dir = os.path.join(INPUT_DIR, scene_dir, camera_dir, f"cropped_images/{cfg.SCT}_{cfg.DETECTION}")
             img_list = os.listdir(data_dir)
             imgs = [os.path.join(data_dir, img) for img in img_list]
-            max_task_num += int(len(imgs)/IMS_PER_BATCH) + 1
-            det_feature_file = os.path.join(INPUT_DIR, scene_dir, camera_dir, "det_feature.txt")
+            max_task_num += len(imgs)
+            det_feature_file = os.path.join(INPUT_DIR, scene_dir, camera_dir, f"mtsc/mtsc_{cfg.SCT}_{cfg.DETECTION}.txt")
             det_features = read_det_features_file(det_feature_file)
-            data_queue.put([imgs, det_features])
+            data_queue.put([imgs, det_features, trans_mat])
             
 
     return data_queue, max_task_num
 
-def _inference(model, data_queue, finish):
+def main(model, data_queue, finish):
     while not data_queue.empty():
-        imgs, det_features = data_queue.get()
+        imgs, det_features, trans_mat = data_queue.get()
         transforms = build_transform(cfg)
         dataset = ImageDataset(imgs, transforms)
         dataloader = DataLoader(dataset, batch_size=IMS_PER_BATCH, shuffle=False, num_workers=cfg.NUM_WORKERS, collate_fn=collate_fn)
@@ -102,13 +122,19 @@ def _inference(model, data_queue, finish):
                     path = os.path.join(INPUT_DIR, scene_dir, camera_dir)
                     
                     with open(os.path.join(path, f'all_features.txt'), 'a+') as f:
-                        img_name = p.split('/')[-1]
-                        det_feat = det_features[img_name]
+                        key = p.split('/')[-1][:-4]
+                        det_feat = det_features[key]
+                        frame_id, id = key.split("_")
+                        box = det_feat.split(",")
+                        coor = [int(float(box[0])) + int(float(box[2]))/2, int(float(box[1])) + int(float(box[3]))/2, 1]
+                        GPS_coor = np.dot(trans_mat, coor)
+                        GPS_coor = GPS_coor / GPS_coor[2]
                         reid_feat = list(feat[i].cpu().numpy())
                         reid_feat_str = str(reid_feat)[1:-1].replace(" ", "")
-                        line = img_name + "," + det_feat + "," + reid_feat_str + "\n"
+                        line = frame_id + "," + id + "," + det_feat + "," + str(GPS_coor[0]) + "," + str(GPS_coor[1]) \
+                                + "," + reid_feat_str + "\n"
                         f.write(line)
-                finish.value += 1
+                finish.value += len(paths)
 
 if __name__ == "__main__":
     mp.set_start_method("spawn")
@@ -116,12 +142,12 @@ if __name__ == "__main__":
     model = model.to(DEVICE)
     model = model.eval()
     model.share_memory()
-    data_queue, max_task_num = _process_data()
+    data_queue, max_task_num = prepare_data()
     finish = mp.Value('i', 0)
     
     print (f"Create {cfg.NUM_WORKERS} processes.")
     for i in range(cfg.NUM_WORKERS):
-        p = mp.Process(target=_inference, args=(model, data_queue, finish))
+        p = mp.Process(target=main, args=(model, data_queue, finish))
         p.start()
     
     for i in tqdm(range(max_task_num), desc="Extracting Features"):
