@@ -109,8 +109,8 @@ def main(device, data_queue, stop, write_lock):
     while not data_queue.empty() or not stop.value:
         if data_queue.empty():
             continue
-
         data, paths, det_features, trans_mat = data_queue.get()
+
         with torch.no_grad():
             data = data.to(device)
             feat = model(data)
@@ -167,8 +167,9 @@ if __name__ == "__main__":
         dataset = ImageDataset(imgs, transforms)
         dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, collate_fn=collate_fn)
         for data, paths in tqdm(dataloader, desc=f"Extracting Features From {key}"):
-            if data_queue.empty():
-                data_queue.put([data, paths, det_features, trans_mat])
+            while not data_queue.empty():
+                pass
+            data_queue.put([data, paths, det_features, trans_mat])
             
     stop.value = True
 
