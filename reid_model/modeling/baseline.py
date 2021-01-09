@@ -46,25 +46,25 @@ class Backbone(nn.Module):
             self.base = ResNet(last_stride=last_stride,
                                block=Bottleneck, frozen_stages=opt.frozen,
                                layers=[3, 4, 6, 3])
-            print('using resnet50 as a backbone')
+            # print('using resnet50 as a backbone')
         elif model_name == 'resnet50_ibn_a':
             self.in_planes = 2048
             self.base = resnet50_ibn_a(last_stride)
-            print('using resnet50_ibn_a as a backbone')
+            # print('using resnet50_ibn_a as a backbone')
         elif model_name == 'resnet101_ibn_a':
             self.in_planes = 2048
             self.base = resnet101_ibn_a(last_stride, frozen_stages=opt.frozen)
-            print('using resnet101_ibn_a as a backbone')
+            # print('using resnet101_ibn_a as a backbone')
         elif model_name == 'se_resnet101_ibn_a':
             self.in_planes = 2048
             self.base = se_resnet101_ibn_a(last_stride,frozen_stages=opt.frozen)
-            print('using se_resnet101_ibn_a as a backbone')
+            # print('using se_resnet101_ibn_a as a backbone')
         else:
             print('unsupported backbone! but got {}'.format(model_name))
 
         if pretrain_choice == 'imagenet':
             self.base.load_param(model_path)
-            print('Loading pretrained ImageNet model......from {}'.format(model_path))
+            # print('Loading pretrained ImageNet model......from {}'.format(model_path))
 
         self.gap = nn.AdaptiveAvgPool2d(1)
 

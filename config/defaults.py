@@ -14,7 +14,7 @@ _C.DETECTION = "mask_rcnn"
 _C.PATH.ROOT_PATH = '<path_project_dir>'
 _C.PATH.INPUT_PATH = '<path_to_input_path>' # train or validation or test
 
-_C.DEVICE.GPU = 1 # gpu number
+_C.DEVICE.GPUS = [1, 2, 3] # gpu number
 _C.DEVICE.TYPE = "<cuda or cpu>"
 
 _C.REID.WEIGHTS = "<path_to_reid_model_weight>"

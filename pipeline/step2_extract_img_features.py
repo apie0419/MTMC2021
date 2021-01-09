@@ -16,15 +16,9 @@ check_setting(cfg)
 
 INPUT_DIR     = cfg.PATH.INPUT_PATH
 DEVICE        = cfg.DEVICE.TYPE
-GPU           = cfg.DEVICE.GPU
+GPUS          = cfg.DEVICE.GPUS
+BATCH_SIZE    = cfg.REID.BATCH_SIZE
 NUM_WORKERS   = 4
-IMS_PER_BATCH = 64
-device        = None
-
-if DEVICE == "cuda":
-    device = torch.device(DEVICE + ':' + str(GPU))
-elif DEVICE == "cpu":
-    device = torch.device(DEVICE)
 
 class ImageDataset(Dataset):
 
@@ -85,8 +79,8 @@ def analysis_transfrom_mat(cali_path):
     return inv_transfrom_mat
 
 def prepare_data():
-    data_queue = mp.Queue()
-    max_task_num = 0
+    data_dict = dict()
+    
     for scene_dir in tqdm(os.listdir(INPUT_DIR), desc="Loading Data"):
         if not scene_dir.startswith("S01"):
             continue
@@ -102,63 +96,84 @@ def prepare_data():
             data_dir = os.path.join(INPUT_DIR, scene_dir, camera_dir, f"cropped_images/{cfg.SCT}_{cfg.DETECTION}")
             img_list = os.listdir(data_dir)
             imgs = [os.path.join(data_dir, img) for img in img_list]
-            max_task_num += len(imgs)
             det_feature_file = os.path.join(INPUT_DIR, scene_dir, camera_dir, f"mtsc/mtsc_{cfg.SCT}_{cfg.DETECTION}.txt")
             det_features = read_det_features_file(det_feature_file)
-            data_queue.put([imgs, det_features, trans_mat])
+            data_dict[scene_dir + '/' + camera_dir] = [imgs, det_features, trans_mat]
             
+    return data_dict
 
-    return data_queue, max_task_num
-
-def main(model, data_queue, finish):
-    
-    while not data_queue.empty():
-        imgs, det_features, trans_mat = data_queue.get()
-        transforms = build_transform(cfg)
-        dataset = ImageDataset(imgs, transforms)
-        dataloader = DataLoader(dataset, batch_size=IMS_PER_BATCH, shuffle=False, num_workers=NUM_WORKERS, collate_fn=collate_fn)
-        with torch.no_grad():
-            for data, paths in dataloader:
-                
-                data = data.to(device)
-                feat = model(data)
-                for i,p in enumerate(paths):
-                    scene_dir = re.search(r"S([0-9]){2}", p).group(0)
-                    camera_dir = re.search(r"c([0-9]){3}", p).group(0)
-                    path = os.path.join(INPUT_DIR, scene_dir, camera_dir)
-                    
-                    with open(os.path.join(path, f'all_features.txt'), 'a+') as f:
-                        key = p.split('/')[-1][:-4]
-                        det_feat = det_features[key]
-                        frame_id, id = key.split("_")
-                        box = det_feat.split(",")
-                        coor = [int(float(box[0])) + int(float(box[2]))/2, int(float(box[1])) + int(float(box[3]))/2, 1]
-                        GPS_coor = np.dot(trans_mat, coor)
-                        GPS_coor = GPS_coor / GPS_coor[2]
-                        reid_feat = list(feat[i].cpu().numpy())
-                        reid_feat_str = str(reid_feat)[1:-1].replace(" ", "")
-                        line = frame_id + "," + id + "," + det_feat + "," + str(GPS_coor[0]) + "," + str(GPS_coor[1]) \
-                                + "," + reid_feat_str + "\n"
-                        f.write(line)
-                finish.value += len(paths)
-
-if __name__ == "__main__":
-    mp.set_start_method("spawn")
+def main(device, data_queue, stop, write_lock):
     model = build_model(cfg)
     model.to(device)
     model = model.eval()
-    model.share_memory()
-    data_queue, max_task_num = prepare_data()
-    finish = mp.Value('i', 0)
+    while not data_queue.empty() or not stop.value:
+        if data_queue.empty():
+            continue
+
+        data, paths, det_features, trans_mat = data_queue.get()
+        with torch.no_grad():
+            data = data.to(device)
+            feat = model(data)
+            for i,p in enumerate(paths):
+                scene_dir = re.search(r"S([0-9]){2}", p).group(0)
+                camera_dir = re.search(r"c([0-9]){3}", p).group(0)
+                path = os.path.join(INPUT_DIR, scene_dir, camera_dir)
+                key = p.split('/')[-1][:-4]
+                det_feat = det_features[key]
+                frame_id, id = key.split("_")
+                box = det_feat.split(",")
+                coor = [int(float(box[0])) + int(float(box[2]))/2, int(float(box[1])) + int(float(box[3]))/2, 1]
+                GPS_coor = np.dot(trans_mat, coor)
+                GPS_coor = GPS_coor / GPS_coor[2]
+                reid_feat = list(feat[i].cpu().numpy())
+                reid_feat_str = str(reid_feat)[1:-1].replace(" ", "")
+
+                write_lock.acquire()
+                with open(os.path.join(path, f'all_features.txt'), 'a+') as f:
+                    line = frame_id + "," + id + "," + det_feat + "," + str(GPS_coor[0]) + "," + str(GPS_coor[1]) \
+                            + "," + reid_feat_str + "\n"
+                    f.write(line)
+                write_lock.release()
+
+if __name__ == "__main__":
+    devices = list()
     
-    print (f"Create {NUM_WORKERS} processes.")
-    for i in range(NUM_WORKERS):
-        p = mp.Process(target=main, args=(model, data_queue, finish))
+    if DEVICE == "cuda":
+        for gpu in GPUS:
+            devices.append(torch.device(DEVICE + ':' + str(gpu)))
+
+    elif DEVICE == "cpu":
+        for i in range(4):
+            devices.append(torch.device(DEVICE))
+
+    mp.set_start_method("spawn")
+
+    data_dict  = prepare_data()
+    transforms = build_transform(cfg)
+    data_queue = mp.Queue()
+    stop       = mp.Value("i", False)
+    write_lock = mp.Lock()
+
+    print (f"Create {len(devices)} processes.")
+
+    processes = list()
+    for device in devices:
+        p = mp.Process(target=main, args=(device, data_queue, stop, write_lock))
         p.start()
+        processes.append(p)
     
-    for i in tqdm(range(max_task_num), desc="Extracting Features"):
-        while i == finish.value:
-            time.sleep(0.1)
+    for key in data_dict:
+        imgs, det_features, trans_mat = data_dict[key]
+        dataset = ImageDataset(imgs, transforms)
+        dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, collate_fn=collate_fn)
+        for data, paths in tqdm(dataloader, desc=f"Extracting Features From {key}"):
+            if data_queue.empty():
+                data_queue.put([data, paths, det_features, trans_mat])
+            
+    stop.value = True
+
+    for p in processes:
+        p.join()
 
     data_queue.close()
     data_queue.join_thread()
