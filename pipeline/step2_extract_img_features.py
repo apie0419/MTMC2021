@@ -82,7 +82,7 @@ def prepare_data():
     data_dict = dict()
     
     for scene_dir in tqdm(os.listdir(INPUT_DIR), desc="Loading Data"):
-        if not scene_dir.startswith("S01"):
+        if not scene_dir.startswith("S0"):
             continue
         for camera_dir in os.listdir(os.path.join(INPUT_DIR, scene_dir)):
             if not camera_dir.startswith("c0"):
@@ -102,10 +102,23 @@ def prepare_data():
             
     return data_dict
 
-def main(device, data_queue, stop, write_lock):
+def progress(task_num, desc, finish_queue):
+    now = 0
+    pbar = tqdm(total=task_num, desc=desc)
+    while True:
+        if now == task_num:
+            break
+        if finish_queue.empty():
+            continue
+        finish_queue.get()
+        pbar.update()
+        now += 1
+
+def main(device, data_queue, stop, write_lock, finish_queue):
     model = build_model(cfg)
     model.to(device)
     model = model.eval()
+    finish_queue.get()
     while not data_queue.empty() or not stop.value:
         if data_queue.empty():
             continue
@@ -134,6 +147,8 @@ def main(device, data_queue, stop, write_lock):
                             + "," + reid_feat_str + "\n"
                     f.write(line)
                 write_lock.release()
+        
+        finish_queue.put(True)
 
 if __name__ == "__main__":
     devices = list()
@@ -148,29 +163,38 @@ if __name__ == "__main__":
 
     mp.set_start_method("spawn")
 
-    data_dict  = prepare_data()
-    transforms = build_transform(cfg)
-    data_queue = mp.Queue()
-    stop       = mp.Value("i", False)
-    write_lock = mp.Lock()
+    data_dict    = prepare_data()
+    transforms   = build_transform(cfg)
+    data_queue   = mp.Queue()
+    finish_queue = mp.Queue()
+    stop         = mp.Value("i", False)
+    write_lock   = mp.Lock()
 
     print (f"Create {len(devices)} processes.")
 
     processes = list()
     for device in devices:
-        p = mp.Process(target=main, args=(device, data_queue, stop, write_lock))
+        finish_queue.put(True)
+        p = mp.Process(target=main, args=(device, data_queue, stop, write_lock, finish_queue))
         p.start()
         processes.append(p)
+
+    print ("Loading Model...")
+    while not finish_queue.empty():
+        time.sleep(0.5)
     
     for key in data_dict:
         imgs, det_features, trans_mat = data_dict[key]
         dataset = ImageDataset(imgs, transforms)
         dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, collate_fn=collate_fn)
-        for data, paths in tqdm(dataloader, desc=f"Extracting Features From {key}"):
+        pbar_process = mp.Process(target=progress, args=(len(dataloader), f"Extracting Features From {key}", finish_queue))
+        pbar_process.start()
+        for data, paths in dataloader:
             while not data_queue.empty():
                 pass
             data_queue.put([data, paths, det_features, trans_mat])
-            
+        pbar_process.join()
+
     stop.value = True
 
     for p in processes:
