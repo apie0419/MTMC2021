@@ -14,11 +14,11 @@ from config import cfg
 
 check_setting(cfg)
 
-INPUT_DIR     = cfg.PATH.INPUT_PATH
-DEVICE        = cfg.DEVICE.TYPE
-GPUS          = cfg.DEVICE.GPUS
-BATCH_SIZE    = cfg.REID.BATCH_SIZE
-NUM_WORKERS   = 4
+INPUT_DIR   = cfg.PATH.INPUT_PATH
+DEVICE      = cfg.DEVICE.TYPE
+GPUS        = cfg.DEVICE.GPUS
+BATCH_SIZE  = cfg.REID.BATCH_SIZE
+NUM_WORKERS = 4
 
 class ImageDataset(Dataset):
 
@@ -61,7 +61,7 @@ def read_det_features_file(file):
         l = line.strip("\n").split(",")
         frame_id = l[0]
         id = l[1]
-        box = ",".join(l[2:])
+        box = ",".join(l[2:6])
         results[frame_id + '_' + id] = box
     
     return results
@@ -87,7 +87,7 @@ def prepare_data():
         for camera_dir in os.listdir(os.path.join(INPUT_DIR, scene_dir)):
             if not camera_dir.startswith("c0"):
                 continue
-            feature_file = os.path.join(INPUT_DIR, scene_dir, camera_dir, f"all_features.txt")
+            feature_file = os.path.join(INPUT_DIR, scene_dir, camera_dir, "all_features.txt")
             if os.path.exists(feature_file):
                 os.remove(feature_file)
 
