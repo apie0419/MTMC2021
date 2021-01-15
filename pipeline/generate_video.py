@@ -18,7 +18,6 @@ write_lock  = mp.Lock()
 manager = mp.Manager()
 colors = manager.dict()
 
-
 def read_result_file(filename):
     res = dict()
     with open(filename, "r") as f:
@@ -35,12 +34,28 @@ def read_result_file(filename):
                 res[frameid].append(r)
     return res
 
-def compress_video(input_file, output_file):
-    stream = ffmpeg.input(input_file).video
-    stream = ffmpeg.output(stream, output_file, vcodec='h264', acodec='mp2')
-    ffmpeg.run(stream)
-    
+def read_frame(in_file, frame_num):
+    out, err = (
+        ffmpeg.input(in_file)
+              .filter('select', 'gte(n,{})'.format(frame_num))
+              .output('pipe:', vframes=1, format='image2', vcodec='mjpeg')
+              .run(quiet=True)
+    )
+    image_array = np.asarray(bytearray(out), dtype="uint8")
+    image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+    return image
 
+def compress_video(input_file, output_file):
+    cap = cv2.VideoCapture(input_file)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    framenum = int(cap.get(7))
+    target_bitrate = int(os.path.getsize(input_file) / 3 / (framenum / fps))
+    
+    stream = ffmpeg.input(input_file).video
+    stream = ffmpeg.output(stream, output_file)
+    stream = ffmpeg.overwrite_output(stream)
+    ffmpeg.run(stream, quiet=True)
+    
 def prepare_data():
     result_list = list()
     camera_dirs = list()
@@ -57,6 +72,7 @@ def prepare_data():
 def write_frame(data_list):
     
     vdo_path, results, frame_id = data_list
+    frame = read_frame(vdo_path, frame_id)
     cap = cv2.VideoCapture(vdo_path)
     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_id)
     ret, frame = cap.read()
@@ -78,23 +94,20 @@ def main(camera_dir, result_dict):
     pool = mp.Pool(NUM_WORKERS)
     
     scene_fd, camera_fd = camera_dir.split('/')[-2:]
-    vdo_path = os.path.join(camera_dir, "vdo.avi")
-    compress_vdo_path = os.path.join(camera_dir, "compress_vdo.mp4")
+    compress_vdo_path = os.path.join(camera_dir, "vdo.avi")
     output_file = os.path.join(camera_dir, f"{camera_fd}_output.avi")
     
-    
-    # compress_video(vdo_path, compress_vdo_path)
     data = list()
-    cap = cv2.VideoCapture(vdo_path)
+    cap = cv2.VideoCapture(compress_vdo_path)
     framenum = int(cap.get(7))
     resolution = (int(cap.get(3)), int(cap.get(4)))
     fps = cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     out = cv2.VideoWriter(output_file, fourcc, fps, resolution)
-    cap.release()
     for frame_id in range(framenum):
         results = result_dict.get(frame_id)
-        data.append([vdo_path, results, frame_id])
+        data.append([compress_vdo_path, results, frame_id])
         
     for frame in tqdm(pool.imap(write_frame, data), total=len(data), desc=f"Generating Output Video of {scene_fd}/{camera_fd}"):
         out.write(frame)
@@ -107,7 +120,23 @@ if __name__ == "__main__":
     
     print (f"Create {NUM_WORKERS} processes.")
     result_list, camera_dirs = prepare_data()
+
+    # compress = None
+    # while compress==None:
+    #     ans = (input("Compress Video?(y/n)") or True)
+    #     if ans == 'Y' or ans == 'y':
+    #         compress = True
+    #     elif ans == 'n' or ans == 'N':
+    #         compress = False
+    #     else:
+    #         print ("Only Y/y or N/n")
+
+    # if compress:
+    #     for camera_dir in tqdm(camera_dirs, desc="Compressing Videos"):
+    #         vdo_path = os.path.join(camera_dir, "vdo.avi")
+    #         compress_vdo_path = os.path.join(camera_dir, "compress_vdo.avi")
+    #         compress_video(vdo_path, compress_vdo_path)
+    
     for i, camera_dir in enumerate(camera_dirs):
         result_dict = result_list[i]
         main(camera_dir, result_dict)
-            
