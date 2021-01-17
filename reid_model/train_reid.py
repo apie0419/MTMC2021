@@ -20,7 +20,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 
 def train():
-    trainloader,queryloader,galleryloader, num_classes = make_reid_dataset(opt.reid_data_root)
+    trainloader, queryloader, galleryloader, num_classes = make_reid_dataset(opt.reid_data_root)
     print(f'image height: {opt.image_height}\t image width: {opt.image_width}')
 
     model = make_model(num_classes)

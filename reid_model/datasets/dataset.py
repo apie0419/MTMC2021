@@ -35,7 +35,7 @@ class ReIdDataset(Dataset):
             image =  self.transform(image)
         self.pid[index] = int(self.pid[index])
         self.cam_id[index] =  int(self.cam_id[index][1:])
-        self.frameid[index]=int(self.frameid[index])
+        self.frameid[index] = int(self.frameid[index])
         return image, self.pid[index], self.cam_id[index],self.frameid[index]
 
 

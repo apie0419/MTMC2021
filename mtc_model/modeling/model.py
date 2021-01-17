@@ -6,7 +6,7 @@ import numpy as np
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
     nn.init.kaiming_normal_(m.weight, a=0, mode='fan_out')
-    # nn.init.constant_(m.bias, 0.0)
+    nn.init.constant_(m.bias, 0.0)
 
 class MCT(nn.Module):
     
@@ -51,7 +51,6 @@ class MCT(nn.Module):
         
         D = torch.diag(torch.sum(A, axis=0))
         T = torch.inverse(D) @ A
-        # T = T / T[0].sum()
         P = T[0]
 
         for _ in range(self.random_walk_iter):
