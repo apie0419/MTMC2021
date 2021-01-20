@@ -15,5 +15,6 @@ _C.DEVICE.TYPE = "<cuda or cpu>"
 
 _C.MCT.E_LAYERS = 3
 _C.MCT.FEATURE_DIM = 2048
+_C.MCT.LEARNING_RATE = 0.02
 
 _C.merge_from_file(os.path.join(BASE_PATH, "config.yaml"))

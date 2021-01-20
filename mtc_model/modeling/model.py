@@ -10,10 +10,11 @@ def weights_init_kaiming(m):
 
 class MCT(nn.Module):
     
-    def __init__(self, dim, num_E=3):
+    def __init__(self, dim, device, num_E=3):
         super(MCT, self).__init__()
         self.gkern_sig = 10
         self.random_walk_iter = 30
+        self.device = device
 
         self.fc1 = nn.Linear(dim, dim)
         self.fc1.apply(weights_init_kaiming)
@@ -21,6 +22,7 @@ class MCT(nn.Module):
         for _ in range(num_E):
             layer = nn.Linear(dim, dim)
             layer.apply(weights_init_kaiming)
+            layer = layer.to(self.device)
             self.E.append(layer)
 
     def attn(self, _input):
@@ -47,7 +49,7 @@ class MCT(nn.Module):
 
     def random_walk(self, A):
         ind = np.diag_indices(A.size()[0])
-        A[ind[0], ind[1]] = torch.zeros(A.size()[0])
+        A[ind[0], ind[1]] = torch.zeros(A.size()[0]).to(self.device)
         
         D = torch.diag(torch.sum(A, axis=0))
         T = torch.inverse(D) @ A
@@ -55,7 +57,6 @@ class MCT(nn.Module):
 
         for _ in range(self.random_walk_iter):
             P = P @ T
-        # print (P)
         
         return P
 
@@ -70,8 +71,12 @@ class MCT(nn.Module):
         for layer in self.E:
             fij = layer(fij)
         A = self.similarity(f_prime, fij)
+        A = A.to(self.device)
         P = F.softmax(self.random_walk(A)[1:], dim=0)
-        return P
+        if self.training:
+            return P, f_prime[0], fij
+        else:
+            return P
 
 
 if __name__ == "__main__":
