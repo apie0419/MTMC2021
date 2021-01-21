@@ -84,9 +84,7 @@ class Dataset(object):
                     tmp = list(zip(orders, gallery_tracks))
                     random.shuffle(tmp)
                     orders, gallery_tracks = zip(*tmp)
-                    idx = orders.index(0)
-                    label = torch.zeros(len(gallery_tracks))
-                    label[idx] = 1
+                    label = torch.tensor([orders.index(0)]).long()
                     tracklets.extend(gallery_tracks)
                     data = torch.stack(tracklets)
                     yield data, label

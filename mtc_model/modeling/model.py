@@ -12,7 +12,7 @@ class MCT(nn.Module):
     
     def __init__(self, dim, device, num_E=3):
         super(MCT, self).__init__()
-        self.gkern_sig = 10
+        self.gkern_sig = 10.0
         self.random_walk_iter = 30
         self.device = device
 
@@ -43,8 +43,11 @@ class MCT(nn.Module):
     def similarity(self, f_prime, fij):  
         assert f_prime.size() == (self.num_tracklets, self.num_tracklets, self.feature_dim)
         assert fij.size() == (self.num_tracklets, self.num_tracklets, self.feature_dim)
+        
         A = torch.exp(-0.5 * (torch.norm(fij - f_prime, p=2, dim=2) ** 2) / (self.gkern_sig ** 2))
-
+        
+        A = A.clone()
+        
         return A
 
     def random_walk(self, A):
@@ -53,10 +56,11 @@ class MCT(nn.Module):
         
         D = torch.diag(torch.sum(A, axis=0))
         T = torch.inverse(D) @ A
+        P0 = T[0]
         P = T[0]
 
         for _ in range(self.random_walk_iter):
-            P = P @ T
+            P = P @ T + P[0]
         
         return P
 
@@ -68,10 +72,12 @@ class MCT(nn.Module):
         f_prime, S = self.projection_ratio(f)
         f_prime = f_prime.expand(self.num_tracklets, self.num_tracklets, self.feature_dim)
         fij = f_prime * S
-        for layer in self.E:
-            fij = layer(fij)
+        print ("fij", fij)
+        print ("f_prime", f_prime)
+        # for layer in self.E:
+        #     fij = layer(fij)
         A = self.similarity(f_prime, fij)
-        A = A.to(self.device)
+        print ("A", A)
         P = F.softmax(self.random_walk(A)[1:], dim=0)
         if self.training:
             return P, f_prime[0], fij

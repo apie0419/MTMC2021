@@ -2,11 +2,12 @@ import torch.nn as nn
 import torch
 import numpy as np
 
-class TripletLoss(nn.Module):
+class TripletLoss(object):
     
-    def __init__(self, margin=0.3):
+    def __init__(self, device, margin=0.3):
         super(TripletLoss, self).__init__()
         self.margin = margin
+        self.device = device
         self.ranking_loss = nn.MarginRankingLoss(margin=margin)
 
     def euclidean_dist(self, x, y):
@@ -27,7 +28,7 @@ class TripletLoss(nn.Module):
 
 
     # def forward(self, f_prime, fij, targets):
-    def forward(self, f_prime, fij, target):
+    def __call__(self, f_prime, fij, target):
         n, feat_size = f_prime.size()
         # Compute pairwise distance, replace by the official when merged
         query_same_feats = fij[0]
@@ -37,12 +38,12 @@ class TripletLoss(nn.Module):
         
         dist_ap, dist_an = [], []
 
-        dist_ap.append(torch.tensor(dist[target[0]]).unsqueeze(0))
+        dist_ap.append(dist[target[0]].unsqueeze(0))
         dist = torch.cat((dist[:target[0]], dist[target[0] + 1:]))
-        dist_an.append(torch.tensor(dist.min()).unsqueeze(0))
-        dist_ap = torch.cat(dist_ap)
-        dist_an = torch.cat(dist_an)
-        y = torch.ones_like(dist_an)
+        dist_an.append(dist.min().unsqueeze(0))
+        dist_ap = torch.cat(dist_ap).to(self.device)
+        dist_an = torch.cat(dist_an).to(self.device)
+        y = torch.ones_like(dist_an).to(self.device)
         q2g_loss = self.ranking_loss(dist_an, dist_ap, y)
         
         fij = fij[1:]
@@ -59,13 +60,13 @@ class TripletLoss(nn.Module):
                 count += 1
 
         dist_ap.append(ap.unsqueeze(0))
-        dist_an.append(torch.tensor(dist.min()).unsqueeze(0))
+        dist_an.append(dist.min().unsqueeze(0))
 
-        dist_ap = torch.cat(dist_ap)
-        dist_an = torch.cat(dist_an)
-        y = torch.ones_like(dist_an)
-        g2q_loss = self.ranking_loss(dist_an, dist_ap, y)    
-        return q2g_loss + g2q_loss
+        dist_ap = torch.cat(dist_ap).to(self.device)
+        dist_an = torch.cat(dist_an).to(self.device)
+        y = torch.ones_like(dist_an).to(self.device)
+        g2q_loss = self.ranking_loss(dist_an, dist_ap, y) 
+        return q2g_loss
 
 if __name__ == "__main__":
     import random
@@ -76,6 +77,6 @@ if __name__ == "__main__":
     f_prime = torch.rand((num_objects, feat_dim)).to(device)
     fij = torch.rand((num_objects, num_objects, feat_dim)).to(device)
     targets = torch.tensor([random.randint(0, num_objects-2)]).long().to(device)
-    criterion = TripletLoss()
+    criterion = TripletLoss(device)
     loss = criterion(f_prime, fij, targets)
     print (loss)
