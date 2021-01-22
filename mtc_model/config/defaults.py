@@ -18,5 +18,6 @@ _C.MCT.E_LAYERS = 3
 _C.MCT.FEATURE_DIM = 2048
 _C.MCT.LEARNING_RATE = 0.02
 _C.MCT.EPOCHS = 10
+_C.MCT.BATCH_SIZE = 64
 
 _C.merge_from_file(os.path.join(BASE_PATH, "config.yaml"))

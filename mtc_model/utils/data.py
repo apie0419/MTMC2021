@@ -47,13 +47,15 @@ class Dataset(object):
                 mean = query_track.mean(dim=0)
                 std = query_track.std(dim=0)
                 query = torch.cat((mean, std))
-                
+                if True in torch.isnan(query).numpy().tolist():
+                    continue
+
                 for camid in self.data_dict:
                     tracklets = [query]
                     gallery_tracks = list()
                     if camid == camera_id:
                         continue
-                    cam_data = self.data_dict[camera_id]
+                    cam_data = self.data_dict[camid]
 
                     if det_id in cam_data:
                         gallery_track = torch.tensor(cam_data[det_id])
@@ -71,12 +73,16 @@ class Dataset(object):
                     _max = 15
                     if len(cam_data) - 1 < _max:
                         _max = len(cam_data) - 1
+                        if len(cam_data) - 1 < _min:
+                            _min = len(cam_data) - 1
 
                     num_objects = random.randint(_min, _max)
                     ids = list(cam_data.keys())
                     random.shuffle(ids)
-                    ids = ids[:num_objects]
+
                     for id in ids:
+                        if (id == det_id) or (num_objects == 0):
+                            continue
                         gallery_track = torch.tensor(cam_data[id])
                         mean = gallery_track.mean(dim=0)
                         std  = gallery_track.std(dim=0)
@@ -84,8 +90,11 @@ class Dataset(object):
                         if True in torch.isnan(gallery).numpy().tolist():
                             continue
                         gallery_tracks.append(gallery)
-                        
+                        num_objects -= 1
                     
+                    if len(gallery_tracks) == 1:
+                        continue
+
                     orders = list(range(len(gallery_tracks)))
                     tmp = list(zip(orders, gallery_tracks))
                     random.shuffle(tmp)
@@ -94,5 +103,3 @@ class Dataset(object):
                     tracklets.extend(gallery_tracks)
                     data = torch.stack(tracklets)
                     yield data, label
-
-        

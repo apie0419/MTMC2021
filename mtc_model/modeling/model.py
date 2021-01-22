@@ -17,11 +17,11 @@ class MCT(nn.Module):
         self.device = device
 
         self.fc1 = nn.Linear(dim, dim)
-        self.fc1.apply(weights_init_kaiming)
+        # self.fc1.apply(weights_init_kaiming)
         self.E = list()
         for _ in range(num_E):
             layer = nn.Linear(dim, dim)
-            layer.apply(weights_init_kaiming)
+            # layer.apply(weights_init_kaiming)
             layer = layer.to(self.device)
             self.E.append(layer)
 
@@ -34,9 +34,7 @@ class MCT(nn.Module):
     def projection_ratio(self, f):
 
         f_prime, scores = self.attn(f)
-        
         fj_prime_mag = torch.norm(f_prime, p=2, dim=1) ** 2
-        
         S = scores / fj_prime_mag
         S = S.view(self.num_tracklets, self.num_tracklets, 1)
 
@@ -57,10 +55,12 @@ class MCT(nn.Module):
     def random_walk(self, A):
         D = torch.diag(torch.sum(A, axis=1))
         T = torch.inverse(D) @ A
+        ind = np.diag_indices(T.size()[0])
+        T[ind[0], ind[1]] = torch.zeros(T.size()[0]).to(self.device)
         P0 = T[0]
         P = T[0]
         for _ in range(self.random_walk_iter):
-            P = P @ T + P0
+            P = 0.5 * (P @ T) + 0.5 * P0
         
         return P
 

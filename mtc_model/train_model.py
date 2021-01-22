@@ -1,4 +1,4 @@
-import os, torch
+import os, torch, time
 
 from tqdm        import tqdm
 from utils       import init_path
@@ -15,6 +15,7 @@ DEVICE        = cfg.DEVICE.TYPE
 GPUS          = cfg.DEVICE.GPUS
 LEARNING_RATE = cfg.MCT.LEARNING_RATE
 EPOCHS        = cfg.MCT.EPOCHS
+BATCH_SIZE    = cfg.MCT.BATCH_SIZE
 OUTPUT_PATH   = cfg.PATH.OUTPUT_PATH
 
 device = torch.device(DEVICE + ':' + str(GPUS[0]))
@@ -31,17 +32,30 @@ if not os.path.exists(OUTPUT_PATH):
     os.mkdir(OUTPUT_PATH)
 
 for epoch in range(1, EPOCHS+1):
-    num_loss = 0
-    pbar = tqdm(dataset.prepare_data(), total=len(dataset))
-    for data, target in pbar:
+    count = 0.
+    loss = 0.
+    pbar = tqdm(total=int(len(dataset) / BATCH_SIZE) + 1)
+    pbar.set_description(f"Epoch {epoch}, Loss=0, Acc=0%")
+
+    for i, (data, target) in enumerate(dataset.prepare_data()):
         data, target = data.to(device), target.to(device)
         preds, f_prime, fij = model(data)
-        loss = criterion(f_prime, fij, target, preds)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        num_loss = round(loss.item(), 4)
-        pbar.set_description(f"Epoch {epoch}, Loss={num_loss}")
-
-    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mtc_epoch{epoch}"))
+        
+        loss += criterion(f_prime, fij, target, preds)
+        
+        if ((i+1) % BATCH_SIZE == 0) or ((i+1) == len(dataset)):
+            loss /= BATCH_SIZE
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            acc = round(count / BATCH_SIZE * 100., 2)
+            num_loss = round(loss.item(), 4)
+            pbar.set_description(f"Epoch {epoch}, Loss={num_loss}, Acc={acc}%")
+            pbar.update()
+            count = 0.
+            loss = 0.
+        
+        if preds.argmax().item() == target[0].item():
+            count += 1
+        
+    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mtc_epoch{epoch}.pth"))
