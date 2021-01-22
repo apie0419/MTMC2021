@@ -66,7 +66,7 @@ class TripletLoss(object):
         dist_an = torch.cat(dist_an).to(self.device)
         y = torch.ones_like(dist_an).to(self.device)
         g2q_loss = self.ranking_loss(dist_an, dist_ap, y) 
-        return q2g_loss
+        return q2g_loss + g2q_loss
 
 if __name__ == "__main__":
     import random

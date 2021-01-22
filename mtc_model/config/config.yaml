@@ -1,5 +1,6 @@
 PATH:
   INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/train"
+  OUTPUT_PATH: "/home/apie/projects/MTMC2021/mtc_model/checkpoints"
 
 DEVICE:
   TYPE: "cuda"
@@ -8,4 +9,5 @@ DEVICE:
 MCT: 
   E_LAYERS: 3
   FEATURE_DIM: 2048
-  LEARNING_RATE: 0.01
+  LEARNING_RATE: 0.001
+  EPOCHS: 10

@@ -60,7 +60,10 @@ class Dataset(object):
                         mean = gallery_track.mean(dim=0)
                         std  = gallery_track.std(dim=0)
                         gallery = torch.cat((mean, std))
+                        if True in torch.isnan(gallery).numpy().tolist():
+                            continue
                         gallery_tracks.append(gallery)
+                        
                     else:
                         continue
 
@@ -78,7 +81,10 @@ class Dataset(object):
                         mean = gallery_track.mean(dim=0)
                         std  = gallery_track.std(dim=0)
                         gallery = torch.cat((mean, std))
+                        if True in torch.isnan(gallery).numpy().tolist():
+                            continue
                         gallery_tracks.append(gallery)
+                        
                     
                     orders = list(range(len(gallery_tracks)))
                     tmp = list(zip(orders, gallery_tracks))

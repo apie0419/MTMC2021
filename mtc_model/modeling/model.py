@@ -12,7 +12,7 @@ class MCT(nn.Module):
     
     def __init__(self, dim, device, num_E=3):
         super(MCT, self).__init__()
-        self.gkern_sig = 10.0
+        self.gkern_sig = 15.0
         self.random_walk_iter = 30
         self.device = device
 
@@ -34,7 +34,9 @@ class MCT(nn.Module):
     def projection_ratio(self, f):
 
         f_prime, scores = self.attn(f)
+        
         fj_prime_mag = torch.norm(f_prime, p=2, dim=1) ** 2
+        
         S = scores / fj_prime_mag
         S = S.view(self.num_tracklets, self.num_tracklets, 1)
 
@@ -44,23 +46,21 @@ class MCT(nn.Module):
         assert f_prime.size() == (self.num_tracklets, self.num_tracklets, self.feature_dim)
         assert fij.size() == (self.num_tracklets, self.num_tracklets, self.feature_dim)
         
-        A = torch.exp(-0.5 * (torch.norm(fij - f_prime, p=2, dim=2) ** 2) / (self.gkern_sig ** 2))
-        
+        dist = torch.norm(torch.abs(fij - f_prime), p=2, dim=2) ** 2
+        ind = np.diag_indices(dist.size()[0])
+        dist[ind[0], ind[1]] = torch.zeros(dist.size()[0]).to(self.device)
+        A = torch.exp(-0.5 * (dist / (self.gkern_sig ** 2)))
         A = A.clone()
         
         return A
 
     def random_walk(self, A):
-        ind = np.diag_indices(A.size()[0])
-        A[ind[0], ind[1]] = torch.zeros(A.size()[0]).to(self.device)
-        
-        D = torch.diag(torch.sum(A, axis=0))
+        D = torch.diag(torch.sum(A, axis=1))
         T = torch.inverse(D) @ A
         P0 = T[0]
         P = T[0]
-
         for _ in range(self.random_walk_iter):
-            P = P @ T + P[0]
+            P = P @ T + P0
         
         return P
 
@@ -72,13 +72,11 @@ class MCT(nn.Module):
         f_prime, S = self.projection_ratio(f)
         f_prime = f_prime.expand(self.num_tracklets, self.num_tracklets, self.feature_dim)
         fij = f_prime * S
-        print ("fij", fij)
-        print ("f_prime", f_prime)
-        # for layer in self.E:
-        #     fij = layer(fij)
+        for layer in self.E:
+            fij = layer(fij)
         A = self.similarity(f_prime, fij)
-        print ("A", A)
-        P = F.softmax(self.random_walk(A)[1:], dim=0)
+        P = self.random_walk(A)
+        P = F.softmax(P[1:], dim=0)
         if self.training:
             return P, f_prime[0], fij
         else:
