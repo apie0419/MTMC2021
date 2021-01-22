@@ -14,9 +14,10 @@ class Dataset(object):
                 for camid in self.data_dict:
                     if camid == camera_id:
                         continue
-                    cam_data = self.data_dict[camera_id]
+                    cam_data = self.data_dict[camid]
                     if det_id not in cam_data:
                         continue
+
                     count += 1
         return count
 
@@ -39,22 +40,27 @@ class Dataset(object):
         return data_dict
 
     def prepare_data(self):
-        count = 0
+        
         for camera_id in self.data_dict:
             for det_id in self.data_dict[camera_id]:
+                hasnan = False
                 query_track = self.data_dict[camera_id][det_id]
                 query_track = torch.tensor(query_track)
                 mean = query_track.mean(dim=0)
                 std = query_track.std(dim=0)
                 query = torch.cat((mean, std))
                 if True in torch.isnan(query).numpy().tolist():
-                    continue
+                    hasnan = True
 
                 for camid in self.data_dict:
                     tracklets = [query]
                     gallery_tracks = list()
                     if camid == camera_id:
                         continue
+                    if hasnan:
+                        yield None, None
+                        continue
+
                     cam_data = self.data_dict[camid]
 
                     if det_id in cam_data:
@@ -63,9 +69,9 @@ class Dataset(object):
                         std  = gallery_track.std(dim=0)
                         gallery = torch.cat((mean, std))
                         if True in torch.isnan(gallery).numpy().tolist():
+                            yield None, None
                             continue
                         gallery_tracks.append(gallery)
-                        
                     else:
                         continue
 
@@ -84,6 +90,7 @@ class Dataset(object):
                         if (id == det_id) or (num_objects == 0):
                             continue
                         gallery_track = torch.tensor(cam_data[id])
+                        
                         mean = gallery_track.mean(dim=0)
                         std  = gallery_track.std(dim=0)
                         gallery = torch.cat((mean, std))
@@ -93,6 +100,7 @@ class Dataset(object):
                         num_objects -= 1
                     
                     if len(gallery_tracks) == 1:
+                        yield None, None
                         continue
 
                     orders = list(range(len(gallery_tracks)))

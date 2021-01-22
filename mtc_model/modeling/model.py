@@ -17,11 +17,9 @@ class MCT(nn.Module):
         self.device = device
 
         self.fc1 = nn.Linear(dim, dim)
-        # self.fc1.apply(weights_init_kaiming)
         self.E = list()
         for _ in range(num_E):
             layer = nn.Linear(dim, dim)
-            # layer.apply(weights_init_kaiming)
             layer = layer.to(self.device)
             self.E.append(layer)
 
