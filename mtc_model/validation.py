@@ -9,15 +9,14 @@ from config     import cfg
 init_path()
 
 DEVICE     = cfg.DEVICE.TYPE
-GPUS       = cfg.DEVICE.GPUS
+GPU        = cfg.DEVICE.GPU
 WEIGHT     = cfg.MCT.WEIGHT
 VALID_PATH = cfg.PATH.VALID_PATH
 
-device = torch.device(DEVICE + ':' + str(GPUS[0]))
+device = torch.device(DEVICE + ':5')
 tracklets_file = os.path.join(VALID_PATH, "gt_features.txt")
 dataset = Dataset(tracklets_file, 3, 6)
-checkpoint = torch.load(WEIGHT)
-
+checkpoint = torch.load(WEIGHT, map_location=device)
 model = build_model(cfg, device)
 model = model.to(device)
 model.load_state_dict(checkpoint)
@@ -42,6 +41,7 @@ with torch.no_grad():
             count += 1
         
         pbar.update()
-    
+
 val_acc = round(count / dataset_len * 100., 2)
+pbar.close()
 print (f"Valdation Accuracy:{val_acc}")

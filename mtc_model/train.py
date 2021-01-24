@@ -1,4 +1,5 @@
 import os, torch, time
+import numpy as np
 
 from tqdm        import tqdm
 from utils       import init_path
@@ -12,13 +13,13 @@ torch.autograd.set_detect_anomaly(True)
 
 init_path()
 DEVICE        = cfg.DEVICE.TYPE
-GPUS          = cfg.DEVICE.GPUS
+GPU           = cfg.DEVICE.GPU
 LEARNING_RATE = cfg.MCT.LEARNING_RATE
 EPOCHS        = cfg.MCT.EPOCHS
 BATCH_SIZE    = cfg.MCT.BATCH_SIZE
 OUTPUT_PATH   = cfg.PATH.OUTPUT_PATH
 
-device = torch.device(DEVICE + ':' + str(GPUS[0]))
+device = torch.device(DEVICE + ':' + str(GPU))
 model = build_model(cfg, device)
 tracklets_file = os.path.join(cfg.PATH.INPUT_PATH, "gt_features.txt")
 dataset = Dataset(tracklets_file, 5, 15)
@@ -32,13 +33,17 @@ if not os.path.exists(OUTPUT_PATH):
     os.mkdir(OUTPUT_PATH)
 
 for epoch in range(1, EPOCHS+1):
+    if epoch % 20 == 0:
+        LEARNING_RATE *= 0.8
+        optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
     count = 0.
     loss = 0.
+    loss_list, acc_list = list(), list()
     iterations = 1
     dataset_len = len(dataset)
     pbar = tqdm(total=int(dataset_len / BATCH_SIZE) + 1)
     pbar.set_description(f"Epoch {epoch}, Loss=0, Acc=0%")
-
+    
     for data, target in dataset.prepare_data():
         if data == None or target == None:
             dataset_len -= 1
@@ -58,6 +63,8 @@ for epoch in range(1, EPOCHS+1):
             optimizer.step()
             acc = round(count / BATCH_SIZE * 100., 2)
             num_loss = round(loss.item(), 4)
+            loss_list.append(num_loss)
+            acc_list.append(acc)
             pbar.set_description(f"Epoch {epoch}, Loss={num_loss}, Acc={acc}%")
             pbar.update()
             count = 0.
@@ -67,5 +74,8 @@ for epoch in range(1, EPOCHS+1):
             count += 1
         
         iterations += 1
-
+    avg_acc = round(np.array(acc_list).mean(), 2)
+    avg_loss = round(np.array(loss_list).mean(), 4)
+    pbar.set_description(f"Epoch {epoch}, Avg_Loss={avg_loss}, Avg_Acc={avg_acc}%")
+    pbar.close()
     torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mtc_epoch{epoch}.pth"))

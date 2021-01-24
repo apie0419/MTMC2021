@@ -12,7 +12,7 @@ _C.PATH.INPUT_PATH = '<path_to_input_path>'
 _C.PATH.VALID_PATH = '<path_to_valid_path>'
 _C.PATH.OUTPUT_PATH = '<path_to_output_path>'
 
-_C.DEVICE.GPUS = [1, 2, 3] # gpu number
+_C.DEVICE.GPU  = 4 # gpu number
 _C.DEVICE.TYPE = "<cuda or cpu>"
 
 _C.MCT.E_LAYERS = 3
