@@ -21,7 +21,7 @@ OUTPUT_PATH   = cfg.PATH.OUTPUT_PATH
 device = torch.device(DEVICE + ':' + str(GPUS[0]))
 model = build_model(cfg, device)
 tracklets_file = os.path.join(cfg.PATH.INPUT_PATH, "gt_features.txt")
-dataset = Dataset(tracklets_file)
+dataset = Dataset(tracklets_file, 5, 15)
 
 criterion = build_loss(device)
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
@@ -67,5 +67,5 @@ for epoch in range(1, EPOCHS+1):
             count += 1
         
         iterations += 1
-        
+
     torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mtc_epoch{epoch}.pth"))

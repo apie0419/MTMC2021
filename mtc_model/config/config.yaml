@@ -1,5 +1,6 @@
 PATH:
   INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/train"
+  VALID_PATH: "/home/apie/projects/MTMC2021/dataset/validation"
   OUTPUT_PATH: "/home/apie/projects/MTMC2021/mtc_model/checkpoints"
 
 DEVICE:
@@ -12,3 +13,4 @@ MCT:
   LEARNING_RATE: 0.0001
   EPOCHS: 50
   BATCH_SIZE: 64
+  WEIGHT: "/home/apie/projects/MTMC2021/mtc_model/checkpoints/best_model.pth"

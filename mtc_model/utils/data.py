@@ -4,8 +4,10 @@ from tqdm import tqdm
 
 class Dataset(object):
 
-    def __init__(self, filename):
+    def __init__(self, filename, tracklets_min, tracklets_max):
         self.data_dict = self.read_tracklets_file(filename)
+        self.tracklets_max = tracklets_max
+        self.tracklets_min = tracklets_min
 
     def __len__(self):
         count = 0
@@ -57,26 +59,26 @@ class Dataset(object):
                     gallery_tracks = list()
                     if camid == camera_id:
                         continue
+                    cam_data = self.data_dict[camid]
+                    if det_id not in cam_data:
+                        continue
                     if hasnan:
                         yield None, None
                         continue
-
-                    cam_data = self.data_dict[camid]
-
-                    if det_id in cam_data:
-                        gallery_track = torch.tensor(cam_data[det_id])
-                        mean = gallery_track.mean(dim=0)
-                        std  = gallery_track.std(dim=0)
-                        gallery = torch.cat((mean, std))
-                        if True in torch.isnan(gallery).numpy().tolist():
-                            yield None, None
-                            continue
-                        gallery_tracks.append(gallery)
-                    else:
+                    
+                    # positive
+                    gallery_track = torch.tensor(cam_data[det_id])
+                    mean = gallery_track.mean(dim=0)
+                    std  = gallery_track.std(dim=0)
+                    gallery = torch.cat((mean, std))
+                    if True in torch.isnan(gallery).numpy().tolist():
+                        yield None, None
                         continue
+                    gallery_tracks.append(gallery)
 
-                    _min = 10
-                    _max = 15
+                    _min = self.tracklets_min
+                    _max = self.tracklets_max
+                    
                     if len(cam_data) - 1 < _max:
                         _max = len(cam_data) - 1
                         if len(cam_data) - 1 < _min:
@@ -86,6 +88,7 @@ class Dataset(object):
                     ids = list(cam_data.keys())
                     random.shuffle(ids)
 
+                    # negetive
                     for id in ids:
                         if (id == det_id) or (num_objects == 0):
                             continue
@@ -111,3 +114,4 @@ class Dataset(object):
                     tracklets.extend(gallery_tracks)
                     data = torch.stack(tracklets)
                     yield data, label
+
