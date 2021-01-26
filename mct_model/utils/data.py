@@ -114,4 +114,3 @@ class Dataset(object):
                     tracklets.extend(gallery_tracks)
                     data = torch.stack(tracklets)
                     yield data, label
-

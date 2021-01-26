@@ -10,18 +10,19 @@ def weights_init_kaiming(m):
 
 class MCT(nn.Module):
     
-    def __init__(self, dim, device, num_E=3):
+    def __init__(self, dim, device):
         super(MCT, self).__init__()
         self.gkern_sig = 15.0
         self.random_walk_iter = 30
         self.device = device
 
         self.fc1 = nn.Linear(dim, dim)
-        self.E = list()
-        for _ in range(num_E):
-            layer = nn.Linear(dim, dim)
-            layer = layer.to(self.device)
-            self.E.append(layer)
+        self.cos = nn.CosineSimilarity(dim=2)
+        
+        ## E
+        self.fc2 = nn.Linear(dim, dim)
+        self.fc3 = nn.Linear(dim, dim)
+        self.fc4 = nn.Linear(dim, dim)
 
     def attn(self, _input):
         x = self.fc1(_input)
@@ -70,8 +71,10 @@ class MCT(nn.Module):
         f_prime, S = self.projection_ratio(f)
         f_prime = f_prime.expand(self.num_tracklets, self.num_tracklets, self.feature_dim)
         fij = f_prime * S
-        for layer in self.E:
-            fij = layer(fij)
+        fij = self.fc2(fij)
+        fij = self.fc3(fij)
+        fij = self.fc4(fij)
+        
         A = self.similarity(f_prime, fij)
         P = self.random_walk(A)
         P = F.softmax(P[1:], dim=0)
@@ -85,7 +88,7 @@ if __name__ == "__main__":
     num_tracklets = 3
     feature_dim = 2048
     tracklets = list()
-
+    device = torch.device("cuda:5")
     for _ in range(num_tracklets):
         num_objects = random.randint(3, 10)
         tracklet = torch.rand((num_objects, feature_dim))
@@ -94,7 +97,7 @@ if __name__ == "__main__":
         tracklet_features = torch.cat((mean, std))
         tracklets.append(tracklet_features)
     
-    tracklets = torch.stack(tracklets)
+    tracklets = torch.stack(tracklets).to(device)
         
-    model = MCT(feature_dim * 2)
+    model = MCT(feature_dim * 2, device).to(device)
     output = model(tracklets)

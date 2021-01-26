@@ -13,4 +13,3 @@ def build_model(cfg):
     checkpoint = torch.load(WEIGHT)
     model.load_state_dict(checkpoint['state_dict'])
     return model
-

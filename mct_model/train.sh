@@ -1,0 +1,1 @@
+nohup python train.py 2>&1 &

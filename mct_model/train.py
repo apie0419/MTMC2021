@@ -1,4 +1,4 @@
-import os, torch, time
+import os, torch, time, random
 import numpy as np
 
 from tqdm        import tqdm
@@ -26,8 +26,7 @@ dataset = Dataset(tracklets_file, 5, 15)
 
 criterion = build_loss(device)
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
-model = model.to(device)
-model = model.train()
+model.train()
 
 if not os.path.exists(OUTPUT_PATH):
     os.mkdir(OUTPUT_PATH)
@@ -61,11 +60,11 @@ for epoch in range(1, EPOCHS+1):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            acc = round(count / BATCH_SIZE * 100., 2)
-            num_loss = round(loss.item(), 4)
+            acc = count / BATCH_SIZE * 100.
+            num_loss = loss.item()
             loss_list.append(num_loss)
             acc_list.append(acc)
-            pbar.set_description(f"Epoch {epoch}, Loss={num_loss}, Acc={acc}%")
+            pbar.set_description("Epoch {}, Loss={:.4f}, Acc={:.2f}%".format(epoch, num_loss, acc))
             pbar.update()
             count = 0.
             loss = 0.
@@ -74,8 +73,41 @@ for epoch in range(1, EPOCHS+1):
             count += 1
         
         iterations += 1
-    avg_acc = round(np.array(acc_list).mean(), 2)
-    avg_loss = round(np.array(loss_list).mean(), 4)
-    pbar.set_description(f"Epoch {epoch}, Avg_Loss={avg_loss}, Avg_Acc={avg_acc}%")
+        
+    avg_acc = np.array(acc_list).mean()
+    avg_loss = np.array(loss_list).mean()
+    pbar.set_description("Epoch {}, Avg_Loss={:.4f}, Avg_Acc={:.2f}%".format(epoch, avg_loss, avg_acc))
     pbar.close()
-    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mtc_epoch{epoch}.pth"))
+    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}.pth"))
+
+## Validation
+
+VALID_PATH = cfg.PATH.VALID_PATH
+
+tracklets_file = os.path.join(VALID_PATH, "gt_features.txt")
+dataset = Dataset(tracklets_file, 3, 6)
+model.eval()
+
+dataset_len = len(dataset)
+count = 0.
+
+pbar = tqdm(total=dataset_len)
+
+with torch.no_grad():
+    for data, target in dataset.prepare_data():
+        if data == None or target == None:
+            dataset_len -= 1
+            pbar.total -= 1
+            pbar.refresh()
+            continue
+
+        data, target = data.to(device), target.to(device)
+        preds = model(data)
+        if preds.argmax().item() == target[0].item():
+            count += 1
+        
+        pbar.update()
+
+val_acc = count / dataset_len * 100.
+pbar.close()
+print ("Valdation Accuracy:{:.2f}%".format(val_acc))
