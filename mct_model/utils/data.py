@@ -45,14 +45,11 @@ class Dataset(object):
         
         for camera_id in self.data_dict:
             for det_id in self.data_dict[camera_id]:
-                hasnan = False
                 query_track = self.data_dict[camera_id][det_id]
                 query_track = torch.tensor(query_track)
                 mean = query_track.mean(dim=0)
-                std = query_track.std(dim=0)
+                std = query_track.std(dim=0, unbiased=False)
                 query = torch.cat((mean, std))
-                if True in torch.isnan(query).numpy().tolist():
-                    hasnan = True
 
                 for camid in self.data_dict:
                     tracklets = [query]
@@ -62,18 +59,12 @@ class Dataset(object):
                     cam_data = self.data_dict[camid]
                     if det_id not in cam_data:
                         continue
-                    if hasnan:
-                        yield None, None
-                        continue
                     
                     # positive
                     gallery_track = torch.tensor(cam_data[det_id])
                     mean = gallery_track.mean(dim=0)
-                    std  = gallery_track.std(dim=0)
+                    std  = gallery_track.std(dim=0, unbiased=False)
                     gallery = torch.cat((mean, std))
-                    if True in torch.isnan(gallery).numpy().tolist():
-                        yield None, None
-                        continue
                     gallery_tracks.append(gallery)
 
                     _min = self.tracklets_min
@@ -95,10 +86,8 @@ class Dataset(object):
                         gallery_track = torch.tensor(cam_data[id])
                         
                         mean = gallery_track.mean(dim=0)
-                        std  = gallery_track.std(dim=0)
+                        std  = gallery_track.std(dim=0, unbiased=False)
                         gallery = torch.cat((mean, std))
-                        if True in torch.isnan(gallery).numpy().tolist():
-                            continue
                         gallery_tracks.append(gallery)
                         num_objects -= 1
                     
@@ -114,3 +103,19 @@ class Dataset(object):
                     tracklets.extend(gallery_tracks)
                     data = torch.stack(tracklets)
                     yield data, label
+
+if __name__ == "__main__":
+    tracklets_file = "/home/apie/projects/MTMC2021/dataset/train/gt_features.txt"
+    dataset = Dataset(tracklets_file, 5, 15)
+    dataset_len = len(dataset)
+    pbar = tqdm(total=dataset_len)
+    print ("Before", str(dataset_len))
+    for data, target in dataset.prepare_data():
+        if data == None or target == None:
+            dataset_len -= 1
+            pbar.total = dataset_len
+            pbar.refresh()
+            continue
+        pbar.update()
+    pbar.close()
+    print ("After", str(dataset_len))

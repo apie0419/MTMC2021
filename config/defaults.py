@@ -7,6 +7,7 @@ _C = CN()
 _C.PATH = CN()
 _C.DEVICE = CN()
 _C.REID = CN()
+_C.MCT = CN()
 
 _C.SCT = "tc"
 _C.DETECTION = "mask_rcnn"
@@ -23,5 +24,7 @@ _C.REID.NUM_CLASSES = 667
 _C.REID.EMB_SIZE = 2048
 _C.REID.BATCH_SIZE = 64
 
+_C.MCT.FEATURE_DIM = 2048
+_C.MCT.WEIGHT = '<path_to_weight>'
 
 _C.merge_from_file(os.path.join(BASE_PATH, "config.yaml"))

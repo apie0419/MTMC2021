@@ -13,5 +13,9 @@ REID:
   EMB_SIZE: 2048
   BATCH_SIZE: 64
 
+MCT:
+  FEATURE_DIM: 2048
+  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/mct_epoch100.pth"
+
 DETECTION: "mask_rcnn"
 SCT: "tc"

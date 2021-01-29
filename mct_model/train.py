@@ -79,35 +79,3 @@ for epoch in range(1, EPOCHS+1):
     pbar.set_description("Epoch {}, Avg_Loss={:.4f}, Avg_Acc={:.2f}%".format(epoch, avg_loss, avg_acc))
     pbar.close()
     torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}.pth"))
-
-## Validation
-
-VALID_PATH = cfg.PATH.VALID_PATH
-
-tracklets_file = os.path.join(VALID_PATH, "gt_features.txt")
-dataset = Dataset(tracklets_file, 3, 6)
-model.eval()
-
-dataset_len = len(dataset)
-count = 0.
-
-pbar = tqdm(total=dataset_len)
-
-with torch.no_grad():
-    for data, target in dataset.prepare_data():
-        if data == None or target == None:
-            dataset_len -= 1
-            pbar.total -= 1
-            pbar.refresh()
-            continue
-
-        data, target = data.to(device), target.to(device)
-        preds = model(data)
-        if preds.argmax().item() == target[0].item():
-            count += 1
-        
-        pbar.update()
-
-val_acc = count / dataset_len * 100.
-pbar.close()
-print ("Valdation Accuracy:{:.2f}%".format(val_acc))

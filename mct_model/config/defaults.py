@@ -15,7 +15,6 @@ _C.PATH.OUTPUT_PATH = '<path_to_output_path>'
 _C.DEVICE.GPU  = 4 # gpu number
 _C.DEVICE.TYPE = "<cuda or cpu>"
 
-_C.MCT.E_LAYERS = 3
 _C.MCT.FEATURE_DIM = 2048
 _C.MCT.LEARNING_RATE = 0.02
 _C.MCT.EPOCHS = 10
