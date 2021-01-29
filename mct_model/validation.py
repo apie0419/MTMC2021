@@ -36,6 +36,7 @@ with torch.no_grad():
 
         data, target = data.to(device), target.to(device)
         preds = model(data)
+        print (preds, target[0].item())
         if preds.argmax().item() == target[0].item():
             count += 1
         

@@ -152,7 +152,7 @@ def write_results(results, camera_dirs):
                     f.write(line)
         
 def match_track(model, query_track, gallery_tracks):
-    
+    qid = query_track.id
     query_track = torch.tensor(query_track.feature_list)
     mean = query_track.mean(dim=0)
     std = query_track.std(dim=0, unbiased=False)
@@ -171,7 +171,10 @@ def match_track(model, query_track, gallery_tracks):
     with torch.no_grad():
         data = data.to(device)
         preds = model(data)
-        match_id = ids[preds.argmax().item()]
+        if preds.max().item() - (1. / preds.size(0)) > 0.1 / preds.size(0):
+            match_id = ids[preds.argmax().item()]
+        else:
+            match_id = qid
 
     return match_id
 
@@ -199,9 +202,10 @@ def main(data, camera_dirs):
             dis = getdistance(first_gps, last_gps)
             ts = abs(query_track.frame_list[0] - query_track.frame_list[-1]) * qt_ts_per_frame
             if dis == 0 or ts == 0:
+                results[camera].append(query_track)
                 continue
             speed = dis / ts
-            filter_num = 0
+            gids = list()
             for c in results:
                 gt_ts = ts_dict[c]
                 gt_ts_per_frame = 1/fps_dict[c]
@@ -219,15 +223,17 @@ def main(data, camera_dirs):
                         continue
                     expected_time = getdistance(query_track.gps_list[0], gallery_track.gps_list[0]) / speed
                     
-                    if abs(dis_ts - expected_time) > 30 or direction < 0:
-                        filter_num += 1
+                    if (direction < 0) or (gallery_track.id in gids):
                         continue
+
+                    gids.append(gallery_track.id)
                     gallery_tracks.append(gallery_track)
             if len(gallery_tracks) == 0:
-                continue
-            match_id = match_track(model, query_track, gallery_tracks)
-            query_track.id = match_id
-            results[camera].append(query_track)
+                results[camera].append(query_track)
+            else:
+                match_id = match_track(model, query_track, gallery_tracks)
+                query_track.id = match_id
+                results[camera].append(query_track)
 
     write_results(results, camera_dirs)
     
