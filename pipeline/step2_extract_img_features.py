@@ -166,7 +166,7 @@ if __name__ == "__main__":
     data_dict    = prepare_data()
     transforms   = build_transform(cfg)
     data_queue   = mp.Queue()
-    finish_queue = mp.Queue()
+    finish_queue  = mp.Queue()
     stop         = mp.Value("i", False)
     write_lock   = mp.Lock()
 

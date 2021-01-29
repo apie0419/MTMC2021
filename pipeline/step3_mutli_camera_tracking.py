@@ -1,6 +1,6 @@
 import os, re, torch, cv2, math
 import numpy as np
-import multiprocessing as mp
+import torch.multiprocessing as mp
 
 from tqdm      import tqdm
 from utils     import init_path, check_setting
@@ -18,8 +18,8 @@ NUM_WORKERS = mp.cpu_count()
 DEVICE      = cfg.DEVICE.TYPE
 GPUS        = cfg.DEVICE.GPUS
 
-device      = torch.device(DEVICE + ':' + str(GPUS[0]))
 write_lock  = mp.Lock()
+stop        = mp.Value("i", False)
 
 class Track(object):
 
@@ -77,7 +77,7 @@ def cosine(vec1, vec2):
     
     num = float(np.matmul(vec1, vec2))
     s = np.linalg.norm(vec1) * np.linalg.norm(vec2)
-    if s ==0:
+    if s == 0:
         result = 0.0
     else:
         result = num/s
@@ -134,7 +134,6 @@ def prepare_data():
     return data, camera_dirs
 
 def write_results(results, camera_dirs):
-
     for camera_dir in tqdm(camera_dirs, desc="Writing Results"):
         result_file = os.path.join(camera_dir, "res.txt")
         camera = camera_dir.split("/")[-1]
@@ -150,49 +149,67 @@ def write_results(results, camera_dirs):
                             str(xmin) + ',' + str(ymin) + ',' + str(width) + ',' + str(height) + ',' + \
                             str(xworld) + ',' + str(yworld) + "\n"
                     f.write(line)
-        
-def match_track(model, query_track, gallery_tracks):
-    qid = query_track.id
-    query_track = torch.tensor(query_track.feature_list)
-    mean = query_track.mean(dim=0)
-    std = query_track.std(dim=0, unbiased=False)
-    query = torch.cat((mean, std))
-    tracklets = [query]
-    ids = list()
-    for track in gallery_tracks:
-        gallery_track = torch.tensor(track.feature_list)
-        mean = gallery_track.mean(dim=0)
-        std  = gallery_track.std(dim=0, unbiased=False)
-        gallery = torch.cat((mean, std))
-        tracklets.append(gallery)
-        ids.append(track.id)
-        
-    data = torch.stack(tracklets)
-    with torch.no_grad():
-        data = data.to(device)
-        preds = model(data)
-        if preds.max().item() - (1. / preds.size(0)) > 0.1 / preds.size(0):
-            match_id = ids[preds.argmax().item()]
-        else:
-            match_id = qid
 
-    return match_id
+def match_track(device, data_queue, result):
+    model = build_model(cfg, device)
+    model.eval()
+    
+    while not data_queue.empty() or not stop.value:
+        if data_queue.empty():
+            continue
+        query_track, gallery_tracks = data_queue.get()
+        qid = query_track.id
+        query = torch.tensor(query_track.feature_list)
+        mean = query.mean(dim=0)
+        std = query.std(dim=0, unbiased=False)
+        query = torch.cat((mean, std))
+        tracklets = [query]
+        ids = list()
+        for track in gallery_tracks:
+            gallery = torch.tensor(track.feature_list)
+            mean = gallery.mean(dim=0)
+            std  = gallery.std(dim=0, unbiased=False)
+            gallery = torch.cat((mean, std))
+            tracklets.append(gallery)
+            ids.append(track.id)
+            
+        data = torch.stack(tracklets)
+        with torch.no_grad():
+            data = data.to(device)
+            preds = model(data)
+            if preds.max().item() - (1. / preds.size(0)) > 0.1 / preds.size(0):
+                match_id = ids[preds.argmax().item()]
+                query_track.id = match_id
+
+        write_lock.acquire()
+        result.append(query_track)
+        write_lock.release()
+
 
 def main(data, camera_dirs):
-    results = dict()
-    ts_dict = get_timestamp_dict()
+    manager  = mp.Manager()
+    results  = dict()
+    ts_dict  = get_timestamp_dict()
     fps_dict = get_fps_dict()
     first_camera = camera_dirs[0].split("/")[-1]
     results[first_camera] = list(data[first_camera].values())
-    model = build_model(cfg, device)
-    model.eval()
+
     for camera_dir in camera_dirs[1:]:
         camera = camera_dir.split("/")[-1]
         query_tracks = data[camera]
         results[camera] = list()
         qt_ts = ts_dict[camera]
         qt_ts_per_frame = 1/fps_dict[camera]
-        
+        result = manager.list()
+        processes = list()
+        data_queue = mp.Queue()
+        stop.value = False
+        for gpu in GPUS:
+            device = torch.device(DEVICE + ':' + str(gpu))
+            p = mp.Process(target=match_track, args=(device, data_queue, result))
+            p.start()
+            processes.append(p)
+
         for obj_id in tqdm(query_tracks, desc=f"Processing Camera Dir {camera}"):
             gallery_tracks = list()
             query_track = query_tracks[obj_id]
@@ -231,9 +248,18 @@ def main(data, camera_dirs):
             if len(gallery_tracks) == 0:
                 results[camera].append(query_track)
             else:
-                match_id = match_track(model, query_track, gallery_tracks)
-                query_track.id = match_id
-                results[camera].append(query_track)
+                while data_queue.qsize() >= 3:
+                    pass
+
+                data_queue.put([query_track, gallery_tracks])
+        
+        stop.value = True
+        for p in processes:
+            p.join()
+        data_queue.close()
+        data_queue.join_thread()
+
+        results[camera] = result
 
     write_results(results, camera_dirs)
     
