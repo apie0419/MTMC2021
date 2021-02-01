@@ -20,6 +20,7 @@ GPUS        = cfg.DEVICE.GPUS
 
 write_lock  = mp.Lock()
 stop        = mp.Value("i", False)
+count_id    = mp.Value("i", 0)
 
 class Track(object):
 
@@ -155,9 +156,13 @@ def match_track(device, data_queue, result):
     model.eval()
     
     while not data_queue.empty() or not stop.value:
+        
         if data_queue.empty():
             continue
-        query_track, gallery_tracks = data_queue.get()
+        try:
+            query_track, gallery_tracks = data_queue.get(False)
+        except:
+            continue
         qid = query_track.id
         query = torch.tensor(query_track.feature_list)
         mean = query.mean(dim=0)
@@ -174,17 +179,20 @@ def match_track(device, data_queue, result):
             ids.append(track.id)
             
         data = torch.stack(tracklets)
+        match_id = qid
         with torch.no_grad():
             data = data.to(device)
             preds = model(data)
-            if preds.max().item() - (1. / preds.size(0)) > 0.1 / preds.size(0):
+            if preds.max().item() - (1. / preds.size(0)) > 0.05 / preds.size(0):
                 match_id = ids[preds.argmax().item()]
                 query_track.id = match_id
-
+                
         write_lock.acquire()
+        if match_id == qid:
+            query_track.id = count_id.value
+            count_id.value += 1
         result.append(query_track)
         write_lock.release()
-
 
 def main(data, camera_dirs):
     manager  = mp.Manager()
@@ -193,6 +201,7 @@ def main(data, camera_dirs):
     fps_dict = get_fps_dict()
     first_camera = camera_dirs[0].split("/")[-1]
     results[first_camera] = list(data[first_camera].values())
+    count_id.value = len(results[first_camera]) + 1
 
     for camera_dir in camera_dirs[1:]:
         camera = camera_dir.split("/")[-1]
@@ -219,7 +228,6 @@ def main(data, camera_dirs):
             dis = getdistance(first_gps, last_gps)
             ts = abs(query_track.frame_list[0] - query_track.frame_list[-1]) * qt_ts_per_frame
             if dis == 0 or ts == 0:
-                results[camera].append(query_track)
                 continue
             speed = dis / ts
             gids = list()
@@ -240,13 +248,18 @@ def main(data, camera_dirs):
                         continue
                     expected_time = getdistance(query_track.gps_list[0], gallery_track.gps_list[0]) / speed
                     
-                    if (direction < 0) or (gallery_track.id in gids):
+                    if (abs(dis_ts - expected_time) > 10) or (direction < 0) or (gallery_track.id in gids):
                         continue
 
                     gids.append(gallery_track.id)
                     gallery_tracks.append(gallery_track)
+
             if len(gallery_tracks) == 0:
-                results[camera].append(query_track)
+                write_lock.acquire()
+                query_track.id = count_id.value
+                count_id.value += 1
+                result.append(query_track)
+                write_lock.release()
             else:
                 while data_queue.qsize() >= 3:
                     pass
@@ -256,6 +269,7 @@ def main(data, camera_dirs):
         stop.value = True
         for p in processes:
             p.join()
+            
         data_queue.close()
         data_queue.join_thread()
 
@@ -263,7 +277,6 @@ def main(data, camera_dirs):
 
     write_results(results, camera_dirs)
     
-
 if __name__ == "__main__":
     data, camera_dirs = prepare_data()
 
