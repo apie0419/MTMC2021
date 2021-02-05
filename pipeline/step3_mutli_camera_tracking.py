@@ -163,7 +163,7 @@ def match_track(device, data_queue, result):
             query_track, gallery_tracks = data_queue.get(False)
         except:
             continue
-        qid = query_track.id
+        match = False
         query = torch.tensor(query_track.feature_list)
         mean = query.mean(dim=0)
         std = query.std(dim=0, unbiased=False)
@@ -179,16 +179,16 @@ def match_track(device, data_queue, result):
             ids.append(track.id)
             
         data = torch.stack(tracklets)
-        match_id = qid
         with torch.no_grad():
             data = data.to(device)
             preds = model(data)
-            if preds.max().item() - (1. / preds.size(0)) > 0.05 / preds.size(0):
+            if preds.max().item() - (1. / preds.size(0)) > 0.01 / preds.size(0):
                 match_id = ids[preds.argmax().item()]
                 query_track.id = match_id
+                match = True
                 
         write_lock.acquire()
-        if match_id == qid:
+        if not match:
             query_track.id = count_id.value
             count_id.value += 1
         result.append(query_track)

@@ -15,7 +15,7 @@ VALID_PATH = cfg.PATH.VALID_PATH
 
 device = torch.device(DEVICE + ':' + str(5))
 tracklets_file = os.path.join(VALID_PATH, "gt_features.txt")
-dataset = Dataset(tracklets_file, 3, 6)
+dataset = Dataset(tracklets_file, 20, 40)
 checkpoint = torch.load(WEIGHT, map_location=device)
 model = build_model(cfg, device)
 model.load_state_dict(checkpoint)
@@ -36,7 +36,7 @@ with torch.no_grad():
 
         data, target = data.to(device), target.to(device)
         preds = model(data)
-        print (preds, target[0].item())
+        # print (preds, target[0].item())
         if preds.argmax().item() == target[0].item():
             count += 1
         
