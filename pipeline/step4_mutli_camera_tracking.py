@@ -122,7 +122,7 @@ def prepare_data():
     
     files = list()
     for camera_dir in camera_dirs:
-        files.append(os.path.join(camera_dir, "all_features.txt"))
+        files.append(os.path.join(camera_dir, "all_features_post.txt"))
         
     pool = mp.Pool(NUM_WORKERS)
 

@@ -1,5 +1,6 @@
 import os, cv2
 import multiprocessing as mp
+import numpy as np
 
 from tqdm  import tqdm
 from utils import init_path, check_setting
@@ -30,8 +31,17 @@ def halfway_appear(track, roi):
     side_th = 100
     h, w, _ = roi.shape
     bx = track.box_list[0]
-    c_x, c_y = [int(float(bx[0])) + int(float(bx[2]))/2, int(float(bx[1])) + int(float(bx[3]))/2]
-    if bx[0] > side_th and bx[1] > side_th and bx[0] + bx[2] < w - side_th and bx[1] + bx[3] < h - side_th and roi[c_y][c_x][0] > 128:
+    c_x, c_y = [int(float(bx[0])) + int(float(bx[2])/2), int(float(bx[1])) + int(float(bx[3])/2)]
+    con1 = bx[0] > side_th
+    con2 = bx[1] > side_th
+    con3 = bx[0] + bx[2] < w - side_th
+    con4 = bx[0] + bx[2] < w - side_th
+    try:
+        con5 = roi[c_y][c_x][0] > 128
+    except:
+        return False
+    
+    if con1 and con2 and con3 and con4 and con5:
         return True
     else:
         return False
@@ -40,9 +50,17 @@ def halfway_lost(track, roi):
     side_th = 100
     h, w, _ = roi.shape
     bx = track.box_list[-1]
-    c_x, c_y = [int(float(bx[0])) + int(float(bx[2]))/2, int(float(bx[1])) + int(float(bx[3]))/2]
+    c_x, c_y = [int(float(bx[0])) + int(float(bx[2])/2), int(float(bx[1])) + int(float(bx[3])/2)]
+    con1 = bx[0] > side_th
+    con2 = bx[1] > side_th
+    con3 = bx[0] + bx[2] < w - side_th
+    con4 = bx[1] + bx[3] < h - side_th
+    try:
+        con5 = roi[c_y][c_x][0] > 128
+    except:
+        return False
 
-    if bx[0] > side_th and bx[1] > side_th and bx[0] + bx[2] < w - side_th and bx[1] + bx[3] < h - side_th and roi[c_y][c_x][0] > 128:
+    if con1 and con2 and con3 and con4 and con5:
         return True
     else:
         return False
@@ -68,11 +86,16 @@ def remove_edge_box(tracks, roi):
     h, w, _ = roi.shape
     for track_id in tracks:
         boxes = tracks[track_id].box_list
-        l = len(track)
+        l = len(tracks[track_id])
         start = 0
         for i in range(0, l):
             bx = boxes[i]
-            if bx[0] > side_th and bx[1] > side_th and bx[0] + bx[2] < w - side_th and bx[1] + bx[3] < h - side_th:
+            con1 = bx[0] > side_th
+            con2 = bx[1] > side_th
+            con3 = bx[0] + bx[2] < w - side_th
+            con4 = bx[1] + bx[3] < h - side_th
+
+            if con1 and con2 and con3 and con4:
                 break
             else:
                 start = i
@@ -80,7 +103,12 @@ def remove_edge_box(tracks, roi):
         end = l-1
         for i in range(l-1, -1, -1):
             bx = boxes[i]
-            if bx[0] > side_th and bx[1] > side_th and bx[0] + bx[2] < w - side_th and bx[1] + bx[3] < h - side_th:
+            con1 = bx[0] > side_th
+            con2 = bx[1] > side_th
+            con3 = bx[0] + bx[2] < w - side_th
+            con4 = bx[1] + bx[3] < h - side_th
+
+            if con1 and con2 and con3 and con4:
                 break
             else:
                 end = i
@@ -153,7 +181,7 @@ def prepare_data():
     
     files = list()
     for camera_dir in camera_dirs:
-        files.append(os.path.join(camera_dir, f"mtsc/mtsc_{cfg.SCT}_{cfg.DETECTION}.txt"))
+        files.append(os.path.join(camera_dir, "all_features.txt"))
         
     pool = mp.Pool(NUM_WORKERS)
 
@@ -165,60 +193,91 @@ def prepare_data():
 
     return data, camera_dirs
 
-def main():
+def main(_input):
+    tracks, camera_dir = _input
+    roi_path = os.path.join(camera_dir, 'roi.jpg')
+    halfway_list = list()
+    roi_src = cv2.imread(roi_path)
+    roi = preprocess_roi(roi_src)
+    delete_ids = list()
+    for track_id in tracks:
+        track = tracks[track_id]
+        
+        if len(track) < 2:
+            delete_ids.append(track_id)
+            continue
+
+        if halfway_appear(track, roi) or halfway_lost(track, roi):
+            halfway_list.append(track)
+        else:
+            continue
+
+    for id in delete_ids:
+        tracks.pop(id)
+
+    halfway_list = sorted(halfway_list, key=lambda tk: tk.frame_list[0])
+    ids = list(tracks.keys())
+    delete_ids = list()
+    for lost_tk in halfway_list:
+        if (lost_tk.id not in ids) or (lost_tk.id in delete_ids):
+            continue
+        for apr_tk in halfway_list:
+            if (apr_tk.id not in ids) or (apr_tk.id in delete_ids):
+                continue
+            if lost_tk.frame_list[-1] < apr_tk.frame_list[0]:
+                dis = calu_track_distance(lost_tk, apr_tk)
+                time = apr_tk.frame_list[0] - lost_tk.frame_list[-1]
+                if time < 5:
+                    th = 22
+                else:
+                    th = 8
+
+                if dis < th:
+                    for i in range(len(apr_tk)):
+                        lost_tk.frame_list.append(apr_tk.frame_list[i])
+                        lost_tk.feature_list.append(apr_tk.feature_list[i])
+                        lost_tk.box_list.append(apr_tk.box_list[i])
+                        lost_tk.gps_list.append(apr_tk.gps_list[i])
+                    delete_ids.append(apr_tk.id)
+                    
+    tracks = remove_edge_box(tracks, roi)
+    delete_ids = list()
+    for track_id in tracks:
+        track = tracks[track_id]
+        
+        if len(track) < 2:
+            delete_ids.append(track_id)
+            continue
+
+    for id in delete_ids:
+        tracks.pop(id)
+
+    result_file_path = os.path.join(camera_dir, "all_features_post.txt")
+    with open(result_file_path, "a+") as f:
+        for track in tracks.values():
+            obj_id_str = str(track.id)
+            for i in range(len(track)):
+                frame_id_str = str(track.frame_list[i])
+                gps_str = ",".join(list(map(str, track.gps_list[i])))
+                box_str = ",".join(list(map(str, track.box_list[i])))
+                feature_str = ",".join(list(map(str, track.feature_list[i])))
+                line = frame_id_str + ',' + obj_id_str + ',' + box_str + \
+                       ',' + gps_str + ',' + feature_str + '\n'
+                f.write(line)
+    
+
+if __name__ == "__main__":
     data, camera_dirs = prepare_data()
+    pool = mp.Pool(NUM_WORKERS)
+    print (f"Create {NUM_WORKERS} processes.")
+    _input = list()
     for camera_dir in camera_dirs:
         camera_id = camera_dir.split('/')[-1]
-        roi_path = os.path.join(camera_dir, 'roi.jpg')
         tracks = data[camera_id]
-        halfway_list = list()
-        roi_src = cv2.imread(roi_path)
-        roi = preprocess_roi(roi_src)
-        for track_id in tracks:
-            track = tracks[track_id]
-            
-            if len(track) < 2:
-                del data[camera_id][track_id]
-                continue
-
-            if halfway_appear(track, roi) or halfway_lost(track, roi):
-                    halfway_list.append(track)
-                else:
-                    continue
-
-        halfway_list = sorted(halfway_list, key=lambda tk: tk.frame_list[0])
-        delete_list = list()
-        for lost_tk in halfway_list:
-            if lost_tk.id not in data[camera_id].keys():
-                continue
-            for apr_tk in halfway_list:
-                if apr_tk.id not in data[camera_id].keys():
-                    continue
-                if lost_tk.frame_list[-1] < apr_tk.frame_list[0]:
-                    dis = calu_track_distance(lost_tk, apr_tk)
-                    time = apr_tk.frame_list[0] - lost_tk.frame_list[-1]
-                    if time < 5:
-                        th = 22
-                    else:
-                        th = 8
-
-                    if dis < th:
-                        for i in range(len(apr_tk)):
-                            lost_tk.frame_list.append(apr_tk.frame_list[i])
-                            lost_tk.feature_list.append(apr_tk.feature_list[i])
-                            lost_tk.box_list.append(apr_tk.box_list[i])
-                            lost_tk.gps_list.append(apr_tk.gps_list[i])
-                        del data[camera_id][apr_tk.id]
-
-
-
-        tracks = remove_edge_box(tracks, roi)
-        data[camera_dir] = tracks
-
-        for track_id in tracks:
-            track = tracks[track_id]
-            
-            if len(track) < 2:
-                del data[camera_id][track_id]
-
+        _input.append([tracks, camera_dir])
+    del data
+    for _ in tqdm(pool.imap_unordered(main, _input), total=len(_input), desc=f"Post Processing"):
+        pass
     
+    pool.close()
+    pool.join()

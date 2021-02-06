@@ -142,7 +142,7 @@ def main(device, data_queue, stop, write_lock, finish_queue):
                 reid_feat_str = str(reid_feat)[1:-1].replace(" ", "")
 
                 write_lock.acquire()
-                with open(os.path.join(path, f'all_features.txt'), 'a+') as f:
+                with open(os.path.join(path, 'all_features.txt'), 'a+') as f:
                     line = frame_id + "," + id + "," + det_feat + "," + str(GPS_coor[0]) + "," + str(GPS_coor[1]) \
                             + "," + reid_feat_str + "\n"
                     f.write(line)
