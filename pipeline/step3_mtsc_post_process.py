@@ -27,6 +27,17 @@ class Track(object):
     def __len__(self):
         return len(self.frame_list)
 
+    def get_moving_distance(self):
+        sp = self.box_list[0]
+        ep = self.box_list[-1]
+        sp_cx, sp_cy = [int(float(sp[0])) + int(float(sp[2])/2), int(float(sp[1])) + int(float(sp[3])/2)]
+        ep_cx, ep_cy = [int(float(ep[0])) + int(float(ep[2])/2), int(float(ep[1])) + int(float(ep[3])/2)]
+
+        gps_dis_vec = ((ep_cx - sp_cx), (ep_cy - sp_cy))
+        gps_dis = gps_dis_vec[0] ** 2 + gps_dis_vec[1] ** 2
+        return gps_dis
+
+
 def halfway_appear(track, roi):
     side_th = 100
     h, w, _ = roi.shape
@@ -84,9 +95,10 @@ def calu_track_distance(pre_tk, back_tk):
 def remove_edge_box(tracks, roi):
     side_th = 30
     h, w, _ = roi.shape
+    
     for track_id in tracks:
         boxes = tracks[track_id].box_list
-        l = len(tracks[track_id])
+        l = len(boxes)
         start = 0
         for i in range(0, l):
             bx = boxes[i]
@@ -135,11 +147,6 @@ def preprocess_roi(roi):
     right = roi[:, w-width_erode:w, :]
     top = roi[0:height_erode, :, :]
     bottom = roi[h-height_erode:h, :, :]
-
-    left = left*0
-    right = right*0
-    top = top*0
-    bottom = bottom*0
 
     return roi
 
@@ -200,6 +207,7 @@ def main(_input):
     roi_src = cv2.imread(roi_path)
     roi = preprocess_roi(roi_src)
     delete_ids = list()
+    
     for track_id in tracks:
         track = tracks[track_id]
         
@@ -214,15 +222,16 @@ def main(_input):
 
     for id in delete_ids:
         tracks.pop(id)
-
+    
+    
     halfway_list = sorted(halfway_list, key=lambda tk: tk.frame_list[0])
     ids = list(tracks.keys())
     delete_ids = list()
     for lost_tk in halfway_list:
-        if (lost_tk.id not in ids) or (lost_tk.id in delete_ids):
+        if lost_tk.id in delete_ids:
             continue
         for apr_tk in halfway_list:
-            if (apr_tk.id not in ids) or (apr_tk.id in delete_ids):
+            if apr_tk.id in delete_ids:
                 continue
             if lost_tk.frame_list[-1] < apr_tk.frame_list[0]:
                 dis = calu_track_distance(lost_tk, apr_tk)
@@ -239,8 +248,22 @@ def main(_input):
                         lost_tk.box_list.append(apr_tk.box_list[i])
                         lost_tk.gps_list.append(apr_tk.gps_list[i])
                     delete_ids.append(apr_tk.id)
-                    
+    
+    for id in delete_ids:
+        tracks.pop(id)
+
+    delete_ids = list()
+    for track_id in tracks:
+        track = tracks[track_id]
+        speed = track.get_moving_distance() / len(track)
+        if speed < 450:
+            delete_ids.append(track_id)
+
+    for id in delete_ids:
+        tracks.pop(id)
+    
     tracks = remove_edge_box(tracks, roi)
+    
     delete_ids = list()
     for track_id in tracks:
         track = tracks[track_id]
@@ -251,9 +274,16 @@ def main(_input):
 
     for id in delete_ids:
         tracks.pop(id)
+    
+    
+
+    # length = 0
+    # for track in tracks.values():
+    #     length += len(track)
+    # print ("After", camera_dir, length)
 
     result_file_path = os.path.join(camera_dir, "all_features_post.txt")
-    with open(result_file_path, "a+") as f:
+    with open(result_file_path, "w") as f:
         for track in tracks.values():
             obj_id_str = str(track.id)
             for i in range(len(track)):
