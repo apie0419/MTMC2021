@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, Dataset
 from PIL              import Image
 from tqdm             import tqdm 
 from utils.reid       import build_transform, build_model
+from utils.utils      import get_fps_dict, get_timestamp_dict
 from utils            import init_path, check_setting
 
 init_path()
@@ -15,10 +16,14 @@ from config import cfg
 check_setting(cfg)
 
 INPUT_DIR   = cfg.PATH.INPUT_PATH
+ROOT_DIR    = cfg.PATH.ROOT_PATH
 DEVICE      = cfg.DEVICE.TYPE
 GPUS        = cfg.DEVICE.GPUS
 BATCH_SIZE  = cfg.REID.BATCH_SIZE
 NUM_WORKERS = 4
+
+ts_dict = get_timestamp_dict(os.path.join(ROOT_DIR, "cam_timestamp"))
+fps_dict = get_fps_dict(INPUT_DIR)
 
 class ImageDataset(Dataset):
 
@@ -130,10 +135,13 @@ def main(device, data_queue, stop, write_lock, finish_queue):
             for i,p in enumerate(paths):
                 scene_dir = re.search(r"S([0-9]){2}", p).group(0)
                 camera_dir = re.search(r"c([0-9]){3}", p).group(0)
+                fps = fps_dict[camera_dir]
+                start_ts = ts_dict[camera_dir]
                 path = os.path.join(INPUT_DIR, scene_dir, camera_dir)
                 key = p.split('/')[-1][:-4]
                 det_feat = det_features[key]
                 frame_id, id = key.split("_")
+                ts = (1. / fps) * int(frame_id) + start_ts
                 box = det_feat.split(",")
                 coor = [int(float(box[0])) + int(float(box[2]))/2, int(float(box[1])) + int(float(box[3]))/2, 1]
                 GPS_coor = np.dot(trans_mat, coor)
@@ -143,7 +151,7 @@ def main(device, data_queue, stop, write_lock, finish_queue):
 
                 write_lock.acquire()
                 with open(os.path.join(path, 'all_features.txt'), 'a+') as f:
-                    line = frame_id + "," + id + "," + det_feat + "," + str(GPS_coor[0]) + "," + str(GPS_coor[1]) \
+                    line = frame_id + "," + id + "," + det_feat + "," + str(ts) + "," + str(GPS_coor[0]) + "," + str(GPS_coor[1]) \
                             + "," + reid_feat_str + "\n"
                     f.write(line)
                 write_lock.release()

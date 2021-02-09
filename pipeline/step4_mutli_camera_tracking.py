@@ -2,9 +2,11 @@ import os, re, torch, cv2, math
 import numpy as np
 import torch.multiprocessing as mp
 
-from tqdm      import tqdm
-from utils     import init_path, check_setting
-from utils.mct import build_model
+from tqdm          import tqdm
+from utils         import init_path, check_setting
+from utils.mct     import build_model
+from utils.utils   import getdistance, cosine
+from utils.objects import Track
 
 init_path()
 
@@ -19,70 +21,9 @@ DEVICE      = cfg.DEVICE.TYPE
 GPUS        = cfg.DEVICE.GPUS
 
 write_lock  = mp.Lock()
+read_lock   = mp.Lock()
 stop        = mp.Value("i", False)
 count_id    = mp.Value("i", 0)
-
-class Track(object):
-
-    def __init__(self):
-        self.id = None
-        self.gps_list = list()
-        self.feature_list = list()
-        self.frame_list = list()
-        self.box_list = list()
-    
-    def __len__(self):
-        return len(self.frame_list)
-
-def getdistance(pt1, pt2):
-    EARTH_RADIUS = 6378.137
-    lat1, lon1 = pt1[0], pt1[1]
-    lat2, lon2 = pt2[0], pt2[1]
-    radlat1 = lat1 * math.pi / 180
-    radlat2 = lat2 * math.pi / 180
-    lat_dis = radlat1 - radlat2
-    lon_dis = (lon1 * math.pi - lon2 * math.pi) / 180
-    distance = 2 * math.asin(math.sqrt((math.sin(lat_dis/2) ** 2) + math.cos(radlat1) * math.cos(radlat2) * (math.sin(lon_dis/2) ** 2)))
-    distance *= EARTH_RADIUS
-    distance = round(distance * 10000) / 10000
-    return distance
-
-def get_timestamp_dict():
-    ts_dict = dict()
-    for filename in os.listdir(os.path.join(ROOT_DIR, "cam_timestamp")):
-        with open(os.path.join(ROOT_DIR, "cam_timestamp", filename), "r") as f:
-            lines = f.readlines()
-            temp = dict()
-            for line in lines:
-                split_line = line.strip("\n").split(" ")
-                temp[split_line[0]] = float(split_line[1])
-            _max = np.array(list(temp.values())).max()
-            for camid, ts in temp.items():
-                ts_dict[camid] = ts * -1 + _max
-
-    return ts_dict
-
-def get_fps_dict():
-    fps_dict = dict()
-    for scene_dir in os.listdir(INPUT_DIR):
-        if scene_dir.startswith("S0"):
-            for camera_dir in os.listdir(os.path.join(INPUT_DIR, scene_dir)):
-                if camera_dir.startswith("c0"):
-                    video_path = os.path.join(INPUT_DIR, scene_dir, camera_dir, "vdo.avi")
-                    cap = cv2.VideoCapture(video_path)
-                    fps = cap.get(cv2.CAP_PROP_FPS)
-                    fps_dict[camera_dir] = float(fps)
-    return fps_dict
-
-def cosine(vec1, vec2):
-    
-    num = float(np.matmul(vec1, vec2))
-    s = np.linalg.norm(vec1) * np.linalg.norm(vec2)
-    if s == 0:
-        result = 0.0
-    else:
-        result = num/s
-    return result
 
 def read_features_file(file):
     camera_dir = file.split("/")[-2]
@@ -95,8 +36,9 @@ def read_features_file(file):
         frame_id = int(l[0])
         id = int(l[1])
         box = list(map(int, list(map(float, l[2:6]))))
-        gps = list(map(float, l[6:8]))
-        features = np.array(list(map(float, l[8:])), np.float32)
+        ts = float(l[6])
+        gps = list(map(float, l[7:9]))
+        features = np.array(list(map(float, l[9:])), np.float32)
         
         write_lock.acquire()
         if id not in data[camera_dir]:
@@ -106,6 +48,7 @@ def read_features_file(file):
         track.feature_list.append(features)
         track.frame_list.append(frame_id)
         track.box_list.append(box)
+        track.ts_list.append(ts)
         track.id = id
         write_lock.release()
 
@@ -156,13 +99,13 @@ def match_track(device, data_queue, result):
     model.eval()
     
     while not data_queue.empty() or not stop.value:
-        
-        if data_queue.empty():
-            continue
+        read_lock.acquire()
         try:
             query_track, gallery_tracks = data_queue.get(False)
         except:
+            read_lock.release()
             continue
+        read_lock.release()
         match = False
         query = torch.tensor(query_track.feature_list)
         mean = query.mean(dim=0)
@@ -197,8 +140,6 @@ def match_track(device, data_queue, result):
 def main(data, camera_dirs):
     manager  = mp.Manager()
     results  = dict()
-    ts_dict  = get_timestamp_dict()
-    fps_dict = get_fps_dict()
     first_camera = camera_dirs[0].split("/")[-1]
     results[first_camera] = list(data[first_camera].values())
     count_id.value = len(results[first_camera]) + 1
@@ -207,8 +148,6 @@ def main(data, camera_dirs):
         camera = camera_dir.split("/")[-1]
         query_tracks = data[camera]
         results[camera] = list()
-        qt_ts = ts_dict[camera]
-        qt_ts_per_frame = 1/fps_dict[camera]
         result = manager.list()
         processes = list()
         data_queue = mp.Queue()
@@ -223,17 +162,9 @@ def main(data, camera_dirs):
             gallery_tracks = list()
             query_track = query_tracks[obj_id]
             qid = query_track.id
-            first_gps = query_track.gps_list[0]
-            last_gps = query_track.gps_list[-1]
-            dis = getdistance(first_gps, last_gps)
-            ts = abs(query_track.frame_list[0] - query_track.frame_list[-1]) * qt_ts_per_frame
-            if dis == 0 or ts == 0:
-                continue
-            speed = dis / ts
+            speed = query_track.speed()
             gids = list()
             for c in results:
-                gt_ts = ts_dict[c]
-                gt_ts_per_frame = 1/fps_dict[c]
                 for gallery_track in results[c]:
                     
                     g_x = gallery_track.gps_list[int(len(gallery_track)/2)][0] - gallery_track.gps_list[0][0]
@@ -243,7 +174,7 @@ def main(data, camera_dirs):
                     vec1 = [g_x, g_y]
                     vec2 = [q_x, q_y]
                     direction = 1 - cosine(vec1, vec2)
-                    dis_ts = abs((gallery_track.frame_list[0] * gt_ts_per_frame + gt_ts) - (query_track.frame_list[0] * qt_ts_per_frame + qt_ts))
+                    dis_ts = abs(gallery_track.ts_list[0] - query_track.ts_list[0])
                     if np.isnan(direction):
                         continue
                     expected_time = getdistance(query_track.gps_list[0], gallery_track.gps_list[0]) / speed
@@ -263,16 +194,16 @@ def main(data, camera_dirs):
             else:
                 while data_queue.qsize() >= 3:
                     pass
-
+                read_lock.acquire()
                 data_queue.put([query_track, gallery_tracks])
+                read_lock.release()
         
+        data_queue.close()
+        data_queue.join_thread()
         stop.value = True
         for p in processes:
             p.join()
             
-        data_queue.close()
-        data_queue.join_thread()
-
         results[camera] = result
 
     write_results(results, camera_dirs)

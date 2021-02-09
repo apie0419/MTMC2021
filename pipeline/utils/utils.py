@@ -1,4 +1,5 @@
 import numpy as np
+import os, cv2, math
 
 def getdistance(pt1, pt2):
     EARTH_RADIUS = 6378.137
@@ -22,3 +23,30 @@ def cosine(vec1, vec2):
     else:
         result = num/s
     return result
+
+def get_timestamp_dict(ts_dir):
+    ts_dict = dict()
+    for filename in os.listdir(ts_dir):
+        with open(os.path.join(ts_dir, filename), "r") as f:
+            lines = f.readlines()
+            temp = dict()
+            for line in lines:
+                split_line = line.strip("\n").split(" ")
+                temp[split_line[0]] = float(split_line[1])
+            _max = np.array(list(temp.values())).max()
+            for camid, ts in temp.items():
+                ts_dict[camid] = ts * -1 + _max
+
+    return ts_dict
+
+def get_fps_dict(work_dir):
+    fps_dict = dict()
+    for scene_dir in os.listdir(work_dir):
+        if scene_dir.startswith("S0"):
+            for camera_dir in os.listdir(os.path.join(work_dir, scene_dir)):
+                if camera_dir.startswith("c0"):
+                    video_path = os.path.join(work_dir, scene_dir, camera_dir, "vdo.avi")
+                    cap = cv2.VideoCapture(video_path)
+                    fps = cap.get(cv2.CAP_PROP_FPS)
+                    fps_dict[camera_dir] = float(fps)
+    return fps_dict

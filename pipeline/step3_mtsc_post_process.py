@@ -2,8 +2,9 @@ import os, cv2
 import multiprocessing as mp
 import numpy as np
 
-from tqdm  import tqdm
-from utils import init_path, check_setting
+from tqdm          import tqdm
+from utils         import init_path, check_setting
+from utils.objects import Track
 
 init_path()
 
@@ -15,28 +16,8 @@ INPUT_DIR   = cfg.PATH.INPUT_PATH
 NUM_WORKERS = mp.cpu_count()
 write_lock  = mp.Lock()
 
-class Track(object):
-
-    def __init__(self):
-        self.id = None
-        self.frame_list = list()
-        self.box_list = list()
-        self.gps_list = list()
-        self.feature_list = list()
-        
-    def __len__(self):
-        return len(self.frame_list)
-
-    def get_moving_distance(self):
-        sp = self.box_list[0]
-        ep = self.box_list[-1]
-        sp_cx, sp_cy = [int(float(sp[0])) + int(float(sp[2])/2), int(float(sp[1])) + int(float(sp[3])/2)]
-        ep_cx, ep_cy = [int(float(ep[0])) + int(float(ep[2])/2), int(float(ep[1])) + int(float(ep[3])/2)]
-
-        gps_dis_vec = ((ep_cx - sp_cx), (ep_cy - sp_cy))
-        gps_dis = gps_dis_vec[0] ** 2 + gps_dis_vec[1] ** 2
-        return gps_dis
-
+SHORT_TRACK_TH = 2
+STAY_TIME_TH = 30
 
 def halfway_appear(track, roi):
     side_th = 100
@@ -131,11 +112,13 @@ def remove_edge_box(tracks, roi):
             tracks[track_id].feature_list = tracks[track_id].feature_list[0:1]
             tracks[track_id].frame_list = tracks[track_id].frame_list[0:1]
             tracks[track_id].gps_list = tracks[track_id].gps_list[0:1]
+            tracks[track_id].ts_list = tracks[track_id].ts_list[0:1]
         else:
             tracks[track_id].box_list = boxes[start:end]
             tracks[track_id].feature_list = tracks[track_id].feature_list[start:end]
             tracks[track_id].frame_list = tracks[track_id].frame_list[start:end]
             tracks[track_id].gps_list = tracks[track_id].gps_list[start:end]
+            tracks[track_id].ts_list = tracks[track_id].ts_list[start:end]
 
     return tracks
 
@@ -161,8 +144,9 @@ def read_features_file(file):
         frame_id = int(l[0])
         id = int(l[1])
         box = list(map(int, list(map(float, l[2:6]))))
-        gps = list(map(float, l[6:8]))
-        features = np.array(list(map(float, l[8:])), np.float32)
+        ts = float(l[6])
+        gps = list(map(float, l[7:9]))
+        features = np.array(list(map(float, l[9:])), np.float32)
         
         write_lock.acquire()
         if id not in data[camera_dir]:
@@ -172,6 +156,7 @@ def read_features_file(file):
         track.feature_list.append(features)
         track.frame_list.append(frame_id)
         track.box_list.append(box)
+        track.ts_list.append(ts)
         track.id = id
         write_lock.release()
 
@@ -200,32 +185,41 @@ def prepare_data():
 
     return data, camera_dirs
 
+def remove_short_track(tracks):
+    delete_ids = list()
+    for track_id in tracks:
+        track = tracks[track_id]
+        if len(track) < SHORT_TRACK_TH:
+            delete_ids.append(track_id)
+    for track_id in delete_ids:
+        tracks.pop(track_id)
+    return tracks
+
 def main(_input):
     tracks, camera_dir = _input
     roi_path = os.path.join(camera_dir, 'roi.jpg')
-    halfway_list = list()
     roi_src = cv2.imread(roi_path)
     roi = preprocess_roi(roi_src)
-    delete_ids = list()
     
+    tracks = remove_short_track(tracks)
+
+    delete_ids = list()
     for track_id in tracks:
         track = tracks[track_id]
-        
-        if len(track) < 2:
+        stay_time = track.ts_list[-1] - track.ts_list[0]
+        if stay_time > STAY_TIME_TH:
             delete_ids.append(track_id)
-            continue
-
-        if halfway_appear(track, roi) or halfway_lost(track, roi):
-            halfway_list.append(track)
-        else:
-            continue
 
     for id in delete_ids:
         tracks.pop(id)
-    
-    
+
+    halfway_list = list()
+    for track_id in tracks:
+        track = tracks[track_id]
+        if halfway_appear(track, roi) or halfway_lost(track, roi):
+            halfway_list.append(track)
+
     halfway_list = sorted(halfway_list, key=lambda tk: tk.frame_list[0])
-    ids = list(tracks.keys())
     delete_ids = list()
     for lost_tk in halfway_list:
         if lost_tk.id in delete_ids:
@@ -235,8 +229,8 @@ def main(_input):
                 continue
             if lost_tk.frame_list[-1] < apr_tk.frame_list[0]:
                 dis = calu_track_distance(lost_tk, apr_tk)
-                time = apr_tk.frame_list[0] - lost_tk.frame_list[-1]
-                if time < 5:
+                frame_dif = apr_tk.frame_list[0] - lost_tk.frame_list[-1]
+                if frame_dif < 5:
                     th = 22
                 else:
                     th = 8
@@ -247,40 +241,14 @@ def main(_input):
                         lost_tk.feature_list.append(apr_tk.feature_list[i])
                         lost_tk.box_list.append(apr_tk.box_list[i])
                         lost_tk.gps_list.append(apr_tk.gps_list[i])
+                        lost_tk.ts_list.append(apr_tk.ts_list[i])
                     delete_ids.append(apr_tk.id)
     
     for id in delete_ids:
         tracks.pop(id)
 
-    delete_ids = list()
-    for track_id in tracks:
-        track = tracks[track_id]
-        speed = track.get_moving_distance() / len(track)
-        if speed < 450:
-            delete_ids.append(track_id)
-
-    for id in delete_ids:
-        tracks.pop(id)
-    
     tracks = remove_edge_box(tracks, roi)
-    
-    delete_ids = list()
-    for track_id in tracks:
-        track = tracks[track_id]
-        
-        if len(track) < 2:
-            delete_ids.append(track_id)
-            continue
-
-    for id in delete_ids:
-        tracks.pop(id)
-    
-    
-
-    # length = 0
-    # for track in tracks.values():
-    #     length += len(track)
-    # print ("After", camera_dir, length)
+    tracks = remove_short_track(tracks)
 
     result_file_path = os.path.join(camera_dir, "all_features_post.txt")
     with open(result_file_path, "w") as f:
