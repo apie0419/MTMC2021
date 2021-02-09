@@ -256,11 +256,12 @@ def main(_input):
             obj_id_str = str(track.id)
             for i in range(len(track)):
                 frame_id_str = str(track.frame_list[i])
+                ts_str = str(track.ts_list[i])
                 gps_str = ",".join(list(map(str, track.gps_list[i])))
                 box_str = ",".join(list(map(str, track.box_list[i])))
                 feature_str = ",".join(list(map(str, track.feature_list[i])))
                 line = frame_id_str + ',' + obj_id_str + ',' + box_str + \
-                       ',' + gps_str + ',' + feature_str + '\n'
+                       ',' + ts_str + ',' + gps_str + ',' + feature_str + '\n'
                 f.write(line)
     
 
