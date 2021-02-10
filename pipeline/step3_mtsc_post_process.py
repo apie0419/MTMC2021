@@ -17,7 +17,8 @@ NUM_WORKERS = mp.cpu_count()
 write_lock  = mp.Lock()
 
 SHORT_TRACK_TH = 2
-STAY_TIME_TH = 30
+IOU_TH = 0.1
+STAY_TIME_TH = 20 # 30: 12.63, 20:12.80
 
 def halfway_appear(track, roi):
     side_th = 100
@@ -195,6 +196,67 @@ def remove_short_track(tracks):
         tracks.pop(track_id)
     return tracks
 
+def remove_overlapped_box(tracks):
+    frame_dict = dict()
+    res_tracks = dict()
+    for track in tracks.values():
+        for i in range(len(track)):
+            fid = track.frame_list[i]
+            if fid not in frame_dict:
+                frame_dict[fid] = list()
+            box = {
+                "id": track.id,
+                "gps": track.gps_list[i],
+                "feature": track.feature_list[i],
+                "box": track.box_list[i],
+                "ts": track.ts_list[i] 
+            }
+            frame_dict[fid].append(box)
+
+    for fid in frame_dict:
+        boxes = frame_dict[fid]
+        for cur_bx in boxes:
+            box1 = cur_bx["box"]
+            keep = True
+            for cpr_bx in boxes:
+                box2 = cpr_bx["box"]
+                rec1 = [box1[0], box1[1], box1[0] + box1[2], box1[1] + box1[3]]
+                rec2 = [box2[0], box2[1], box2[0] + box2[2], box2[1] + box2[3]]
+                S_rec1 = (rec1[2] - rec1[0]) * (rec1[3] - rec1[1])
+                S_rec2 = (rec2[2] - rec2[0]) * (rec2[3] - rec2[1])
+                left_line = max(rec1[1], rec2[1])
+                right_line = min(rec1[3], rec2[3])
+                top_line = max(rec1[0], rec2[0])
+                bottom_line = min(rec1[2], rec2[2])
+                if left_line >= right_line or top_line >= bottom_line:
+                    iou = 0
+                else:
+                    intersect = (right_line - left_line) * (bottom_line - top_line)
+                    iou = max(float(intersect)/S_rec1, float(intersect)/S_rec2)
+                cur_bottom = box1[1] + box1[3]
+                cpr_bottom = box2[1] + box2[3]
+                if iou > IOU_TH and cur_bottom < cpr_bottom:
+                    keep = False
+                    break
+            if keep:
+                box = cur_bx["box"]
+                track_id = cur_bx["id"]
+                ts = cur_bx["ts"]
+                fts = cur_bx["feature"]
+                gps = cur_bx["gps"]
+                
+                if track_id not in res_tracks:
+                    res_tracks[track_id] = Track()
+                
+                res_tracks[track_id].id = track_id
+                res_tracks[track_id].frame_list.append(fid)
+                res_tracks[track_id].box_list.append(box)
+                res_tracks[track_id].ts_list.append(ts)
+                res_tracks[track_id].gps_list.append(gps)
+                res_tracks[track_id].feature_list.append(fts)
+                
+    return res_tracks
+
 def main(_input):
     tracks, camera_dir = _input
     roi_path = os.path.join(camera_dir, 'roi.jpg')
@@ -249,6 +311,7 @@ def main(_input):
 
     tracks = remove_edge_box(tracks, roi)
     tracks = remove_short_track(tracks)
+    tracks = remove_overlapped_box(tracks) # +1 IDF1
 
     result_file_path = os.path.join(camera_dir, "all_features_post.txt")
     with open(result_file_path, "w") as f:

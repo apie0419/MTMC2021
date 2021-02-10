@@ -163,6 +163,8 @@ def main(data, camera_dirs):
             query_track = query_tracks[obj_id]
             qid = query_track.id
             speed = query_track.speed()
+            if speed == 0:
+                continue
             gids = list()
             for c in results:
                 for gallery_track in results[c]:
@@ -179,7 +181,7 @@ def main(data, camera_dirs):
                         continue
                     expected_time = getdistance(query_track.gps_list[0], gallery_track.gps_list[0]) / speed
                     
-                    if (abs(dis_ts - expected_time) > 30) or (direction < 0) or (gallery_track.id in gids):
+                    if (abs(dis_ts - expected_time) > 30) or (direction < 0.5) or (gallery_track.id in gids):
                         continue
 
                     gids.append(gallery_track.id)

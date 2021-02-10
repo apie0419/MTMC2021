@@ -23,7 +23,7 @@ def main():
     results_filename = os.path.join(INPUT_DIR, "track3.txt")
     with open(results_filename, "w+") as f:
         for camera_dir in camera_dirs:
-            tmp_result_file = os.path.join(camera_dir, "res.txt")
+            tmp_result_file = os.path.join(camera_dir, "res_opt.txt")
             with open(tmp_result_file, "r") as tmp_f:
                 for line in tmp_f.readlines():
                     f.write(line)

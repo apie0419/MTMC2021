@@ -27,4 +27,6 @@ class Track(object):
         distance *= EARTH_RADIUS
         distance = round(distance * 10000) / 10000
         t = self.ts_list[-1] - self.ts_list[0]
+        if t ==0:
+            return 0
         return distance / t
