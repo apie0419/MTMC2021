@@ -54,6 +54,15 @@ def read_features_file(file):
 
     return data
 
+def get_scene_camera_dict(camera_dirs):
+    res = dict()
+    for camera_dir in camera_dirs:
+        camera = camera_dir.split('/')[-1]
+        scene = camera_dir.split('/')[-2]
+        res[camera] = scene
+
+    return res
+
 def prepare_data():
     data = dict()
     camera_dirs = list()
@@ -143,9 +152,10 @@ def main(data, camera_dirs):
     first_camera = camera_dirs[0].split("/")[-1]
     results[first_camera] = list(data[first_camera].values())
     count_id.value = len(results[first_camera]) + 1
-
+    scene_dict = get_scene_camera_dict(camera_dirs)
     for camera_dir in camera_dirs[1:]:
         camera = camera_dir.split("/")[-1]
+        query_scene = scene_dict[camera]
         query_tracks = data[camera]
         results[camera] = list()
         result = manager.list()
@@ -167,6 +177,9 @@ def main(data, camera_dirs):
                 continue
             gids = list()
             for c in results:
+                gallery_scene = scene_dict[c]
+                if gallery_scene != query_scene:
+                    continue
                 for gallery_track in results[c]:
                     
                     g_x = gallery_track.gps_list[int(len(gallery_track)/2)][0] - gallery_track.gps_list[0][0]
@@ -175,13 +188,13 @@ def main(data, camera_dirs):
                     q_y = query_track.gps_list[int(len(query_track)/2)][1] - query_track.gps_list[0][1]
                     vec1 = [g_x, g_y]
                     vec2 = [q_x, q_y]
-                    direction = 1 - cosine(vec1, vec2)
+                    direction = cosine(vec1, vec2)
                     dis_ts = abs(gallery_track.ts_list[0] - query_track.ts_list[0])
                     if np.isnan(direction):
                         continue
                     expected_time = getdistance(query_track.gps_list[0], gallery_track.gps_list[0]) / speed
                     
-                    if (abs(dis_ts - expected_time) > 30) or (direction < 0.5) or (gallery_track.id in gids):
+                    if (abs(dis_ts - expected_time) > 30) or (direction < 0.7) or (gallery_track.id in gids):
                         continue
 
                     gids.append(gallery_track.id)

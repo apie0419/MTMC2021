@@ -327,7 +327,6 @@ def main(_input):
                        ',' + ts_str + ',' + gps_str + ',' + feature_str + '\n'
                 f.write(line)
     
-
 if __name__ == "__main__":
     data, camera_dirs = prepare_data()
     pool = mp.Pool(NUM_WORKERS)
