@@ -5,6 +5,7 @@ import numpy as np
 from tqdm          import tqdm
 from utils         import init_path, check_setting
 from utils.objects import Track
+from utils.utils   import getdistance
 
 init_path()
 
@@ -19,6 +20,7 @@ write_lock  = mp.Lock()
 SHORT_TRACK_TH = 2
 IOU_TH = 0.1
 STAY_TIME_TH = 20 # 30: 12.63, 20:12.80
+MOVE_DIS_TH = 30 #(m)
 
 def halfway_appear(track, roi):
     side_th = 100
@@ -73,55 +75,6 @@ def calu_track_distance(pre_tk, back_tk):
             mindis = min(curdis, mindis)
             
     return mindis
-
-def remove_edge_box(tracks, roi):
-    side_th = 30
-    h, w, _ = roi.shape
-    
-    for track_id in tracks:
-        boxes = tracks[track_id].box_list
-        l = len(boxes)
-        start = 0
-        for i in range(0, l):
-            bx = boxes[i]
-            con1 = bx[0] > side_th
-            con2 = bx[1] > side_th
-            con3 = bx[0] + bx[2] < w - side_th
-            con4 = bx[1] + bx[3] < h - side_th
-
-            if con1 and con2 and con3 and con4:
-                break
-            else:
-                start = i
-
-        end = l-1
-        for i in range(l-1, -1, -1):
-            bx = boxes[i]
-            con1 = bx[0] > side_th
-            con2 = bx[1] > side_th
-            con3 = bx[0] + bx[2] < w - side_th
-            con4 = bx[1] + bx[3] < h - side_th
-
-            if con1 and con2 and con3 and con4:
-                break
-            else:
-                end = i
-        end += 1
-
-        if start >= end:
-            tracks[track_id].box_list = boxes[0:1]
-            tracks[track_id].feature_list = tracks[track_id].feature_list[0:1]
-            tracks[track_id].frame_list = tracks[track_id].frame_list[0:1]
-            tracks[track_id].gps_list = tracks[track_id].gps_list[0:1]
-            tracks[track_id].ts_list = tracks[track_id].ts_list[0:1]
-        else:
-            tracks[track_id].box_list = boxes[start:end]
-            tracks[track_id].feature_list = tracks[track_id].feature_list[start:end]
-            tracks[track_id].frame_list = tracks[track_id].frame_list[start:end]
-            tracks[track_id].gps_list = tracks[track_id].gps_list[start:end]
-            tracks[track_id].ts_list = tracks[track_id].ts_list[start:end]
-
-    return tracks
 
 def preprocess_roi(roi):
     h, w, _ = roi.shape
@@ -186,17 +139,17 @@ def prepare_data():
 
     return data, camera_dirs
 
-def remove_short_track(tracks):
+def remove_short_track(tracks, threshold):
     delete_ids = list()
     for track_id in tracks:
         track = tracks[track_id]
-        if len(track) < SHORT_TRACK_TH:
+        if len(track) < threshold:
             delete_ids.append(track_id)
     for track_id in delete_ids:
         tracks.pop(track_id)
     return tracks
 
-def remove_overlapped_box(tracks):
+def remove_overlapped_box(tracks, threshold):
     frame_dict = dict()
     res_tracks = dict()
     for track in tracks.values():
@@ -235,7 +188,7 @@ def remove_overlapped_box(tracks):
                     iou = max(float(intersect)/S_rec1, float(intersect)/S_rec2)
                 cur_bottom = box1[1] + box1[3]
                 cpr_bottom = box2[1] + box2[3]
-                if iou > IOU_TH and cur_bottom < cpr_bottom:
+                if iou > threshold and cur_bottom < cpr_bottom:
                     keep = False
                     break
             if keep:
@@ -257,24 +210,69 @@ def remove_overlapped_box(tracks):
                 
     return res_tracks
 
-def main(_input):
-    tracks, camera_dir = _input
-    roi_path = os.path.join(camera_dir, 'roi.jpg')
-    roi_src = cv2.imread(roi_path)
-    roi = preprocess_roi(roi_src)
+def remove_edge_box(tracks, roi):
+    side_th = 30
+    h, w, _ = roi.shape
     
-    tracks = remove_short_track(tracks)
+    for track_id in tracks:
+        boxes = tracks[track_id].box_list
+        l = len(boxes)
+        start = 0
+        for i in range(0, l):
+            bx = boxes[i]
+            con1 = bx[0] > side_th
+            con2 = bx[1] > side_th
+            con3 = bx[0] + bx[2] < w - side_th
+            con4 = bx[1] + bx[3] < h - side_th
 
+            if con1 and con2 and con3 and con4:
+                break
+            else:
+                start = i
+
+        end = l-1
+        for i in range(l-1, -1, -1):
+            bx = boxes[i]
+            con1 = bx[0] > side_th
+            con2 = bx[1] > side_th
+            con3 = bx[0] + bx[2] < w - side_th
+            con4 = bx[1] + bx[3] < h - side_th
+
+            if con1 and con2 and con3 and con4:
+                break
+            else:
+                end = i
+        end += 1
+
+        if start >= end:
+            tracks[track_id].box_list = boxes[0:1]
+            tracks[track_id].feature_list = tracks[track_id].feature_list[0:1]
+            tracks[track_id].frame_list = tracks[track_id].frame_list[0:1]
+            tracks[track_id].gps_list = tracks[track_id].gps_list[0:1]
+            tracks[track_id].ts_list = tracks[track_id].ts_list[0:1]
+        else:
+            tracks[track_id].box_list = boxes[start:end]
+            tracks[track_id].feature_list = tracks[track_id].feature_list[start:end]
+            tracks[track_id].frame_list = tracks[track_id].frame_list[start:end]
+            tracks[track_id].gps_list = tracks[track_id].gps_list[start:end]
+            tracks[track_id].ts_list = tracks[track_id].ts_list[start:end]
+
+    return tracks
+
+def remove_slow_tracks(tracks, threshold):
     delete_ids = list()
     for track_id in tracks:
         track = tracks[track_id]
         stay_time = track.ts_list[-1] - track.ts_list[0]
-        if stay_time > STAY_TIME_TH:
+        if stay_time > threshold:
             delete_ids.append(track_id)
 
     for id in delete_ids:
         tracks.pop(id)
+    
+    return tracks
 
+def connect_lost_tracks(tracks, roi):
     halfway_list = list()
     for track_id in tracks:
         track = tracks[track_id]
@@ -308,10 +306,37 @@ def main(_input):
     
     for id in delete_ids:
         tracks.pop(id)
+    
+    return tracks
 
+def remove_no_moving_tracks(tracks, threshold):
+    delete_ids = list()
+    for track_id in tracks:
+        track = tracks[track_id]
+        pt1 = track.gps_list[0]
+        pt2 = track.gps_list[-1]
+        move_dis = getdistance(pt1, pt2)
+        if move_dis < MOVE_DIS_TH:
+            delete_ids.append(track_id)
+
+    for id in delete_ids:
+        tracks.pop(id)
+    
+    return tracks
+
+def main(_input):
+    tracks, camera_dir = _input
+    roi_path = os.path.join(camera_dir, 'roi.jpg')
+    roi_src = cv2.imread(roi_path)
+    roi = preprocess_roi(roi_src)
+    
+    tracks = remove_short_track(tracks, SHORT_TRACK_TH)
+    tracks = remove_slow_tracks(tracks, STAY_TIME_TH)
+    tracks = remove_no_moving_tracks(tracks, MOVE_DIS_TH)
+    tracks = connect_lost_tracks(tracks, roi)
     tracks = remove_edge_box(tracks, roi)
-    tracks = remove_short_track(tracks)
-    tracks = remove_overlapped_box(tracks) # +1 IDF1
+    tracks = remove_short_track(tracks, SHORT_TRACK_TH)
+    tracks = remove_overlapped_box(tracks, IOU_TH) # +1 IDF1
 
     result_file_path = os.path.join(camera_dir, "all_features_post.txt")
     with open(result_file_path, "w") as f:

@@ -134,11 +134,10 @@ def match_track(device, data_queue, result):
         with torch.no_grad():
             data = data.to(device)
             preds = model(data)
-            if preds.max().item() - (1. / preds.size(0)) > 0.01 / preds.size(0):
+            if preds.max().item() > 0.8:
                 match_id = ids[preds.argmax().item()]
                 query_track.id = match_id
                 match = True
-                
         write_lock.acquire()
         if not match:
             query_track.id = count_id.value
@@ -194,7 +193,7 @@ def main(data, camera_dirs):
                         continue
                     expected_time = getdistance(query_track.gps_list[0], gallery_track.gps_list[0]) / speed
                     
-                    if (abs(dis_ts - expected_time) > 30) or (direction < 0.7) or (gallery_track.id in gids):
+                    if (abs(dis_ts - expected_time) > 10) or (direction < 0.7) or (gallery_track.id in gids):
                         continue
 
                     gids.append(gallery_track.id)

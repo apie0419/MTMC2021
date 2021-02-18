@@ -47,7 +47,6 @@ class MCT(nn.Module):
         ind = np.diag_indices(dist.size()[0])
         dist[ind[0], ind[1]] = torch.zeros(dist.size()[0]).to(self.device)
         A = torch.exp(-0.5 * (dist / (self.gkern_sig ** 2)))
-        A = A.clone()
         
         return A
 
@@ -77,7 +76,18 @@ class MCT(nn.Module):
         
         A = self.similarity(f_prime, fij)
         P = self.random_walk(A)
-        P = F.softmax(P[1:], dim=0)
+        # P = P[1:]
+        # print (P.mean())
+        
+        P = P[1:]
+        # print (P - P.mean())
+        P = (P - P.mean())
+        P[P < 0] = 0
+        P = P * 10000
+        P = F.softmax(P, dim=0)
+        # print (P)
+        # P = F.softmax(P[1:], dim=0)
+
         if self.training:
             return P, f_prime[0], fij
         else:
