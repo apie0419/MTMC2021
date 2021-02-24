@@ -13,7 +13,7 @@ class MCT(nn.Module):
     def __init__(self, dim, device):
         super(MCT, self).__init__()
         self.gkern_sig = 15.0
-        self.random_walk_iter = 30
+        self.lamb = 0.9
         self.device = device
 
         self.fc1 = nn.Linear(dim, dim)
@@ -55,10 +55,10 @@ class MCT(nn.Module):
         T = torch.inverse(D) @ A
         ind = np.diag_indices(T.size()[0])
         T[ind[0], ind[1]] = torch.zeros(T.size()[0]).to(self.device)
-        P0 = T[0]
-        P = T[0]
-        for _ in range(self.random_walk_iter):
-            P = 0.5 * (P @ T) + 0.5 * P0
+        P0 = T[0][1:]
+        T = T[1:, 1:]
+        I = torch.eye(T.size()[0]).to(self.device)
+        P = (1 - self.lamb) * torch.inverse(I - self.lamb * T) @ P0
         
         return P
 
@@ -76,18 +76,7 @@ class MCT(nn.Module):
         
         A = self.similarity(f_prime, fij)
         P = self.random_walk(A)
-        # P = P[1:]
-        # print (P.mean())
         
-        P = P[1:]
-        # print (P - P.mean())
-        P = (P - P.mean())
-        P[P < 0] = 0
-        P = P * 10000
-        P = F.softmax(P, dim=0)
-        # print (P)
-        # P = F.softmax(P[1:], dim=0)
-
         if self.training:
             return P, f_prime[0], fij
         else:

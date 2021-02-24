@@ -8,8 +8,7 @@ def build_loss(device):
         t = TripletLoss(device)
         triplet = t(f_prime, fij, target)
         cross = F.cross_entropy(P.view(1, -1), target)
-        loss = triplet + cross
         
-        return loss
+        return triplet, cross
 
     return loss_func

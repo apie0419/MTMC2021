@@ -331,15 +331,13 @@ def main(_input):
     roi_path = os.path.join(camera_dir, 'roi.jpg')
     roi_src = cv2.imread(roi_path)
     roi = preprocess_roi(roi_src)
-    
     tracks = remove_short_track(tracks, SHORT_TRACK_TH)
-    tracks = remove_slow_tracks(tracks, STAY_TIME_TH)
-    tracks = remove_no_moving_tracks(tracks, IOU_TH)
     tracks = connect_lost_tracks(tracks, roi)
     tracks = remove_edge_box(tracks, roi)
     tracks = remove_short_track(tracks, SHORT_TRACK_TH)
+    tracks = remove_slow_tracks(tracks, STAY_TIME_TH)
+    tracks = remove_no_moving_tracks(tracks, IOU_TH)
     tracks = remove_overlapped_box(tracks, IOU_TH) # +1 IDF1
-
     result_file_path = os.path.join(camera_dir, "all_features_post.txt")
     with open(result_file_path, "w") as f:
         for track in tracks.values():

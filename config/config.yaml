@@ -1,6 +1,6 @@
 PATH:
-  ROOT_PATH: "/home/apie/projects/MTMC2021/new_dataset"
-  INPUT_PATH: "/home/apie/projects/MTMC2021/new_dataset/validation"
+  ROOT_PATH: "/home/apie/projects/MTMC2021/dataset"
+  INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/validation"
 
 DEVICE:
   TYPE: "cuda"

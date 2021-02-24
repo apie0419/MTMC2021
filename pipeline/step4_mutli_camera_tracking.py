@@ -103,6 +103,39 @@ def write_results(results, camera_dirs):
                             str(xworld) + ',' + str(yworld) + "\n"
                     f.write(line)
 
+def match_track_by_cosine(data_queue, result):
+    
+    while not data_queue.empty() or not stop.value:
+        read_lock.acquire()
+        try:
+            query_track, gallery_tracks = data_queue.get(False)
+        except:
+            read_lock.release()
+            continue
+        read_lock.release()
+        match = False
+        ids = list()
+        affinity_list = list()
+        for gtrack in gallery_tracks:
+            max_aff = 0
+            for q_ft in query_track.feature_list:
+                for g_ft in gtrack.feature_list:
+                    aff = cosine(q_ft, g_ft)
+                    if aff > max_aff:
+                        max_aff = aff
+            affinity_list.append(max_aff)
+            ids.append(gtrack.id)
+        
+        ind = np.argmax(affinity_list)
+        write_lock.acquire()
+        if affinity_list[ind] < 0.7:
+            query_track.id = count_id.value
+            count_id.value += 1
+        else:
+            query_track.id = ids[ind]
+        result.append(query_track)
+        write_lock.release()
+        
 def match_track(device, data_queue, result):
     model = build_model(cfg, device)
     model.eval()
@@ -162,9 +195,13 @@ def main(data, camera_dirs):
         processes = list()
         data_queue = mp.Queue()
         stop.value = False
-        for gpu in GPUS:
-            device = torch.device(DEVICE + ':' + str(gpu))
-            p = mp.Process(target=match_track, args=(device, data_queue, result))
+        # for gpu in GPUS:
+        #     device = torch.device(DEVICE + ':' + str(gpu))
+        #     p = mp.Process(target=match_track, args=(device, data_queue, result))
+        #     p.start()
+        #     processes.append(p)
+        for _ in range(int(NUM_WORKERS/2)):
+            p = mp.Process(target=match_track_by_cosine, args=(data_queue, result))
             p.start()
             processes.append(p)
 
