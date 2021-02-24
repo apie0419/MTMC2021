@@ -24,6 +24,22 @@ def cosine(vec1, vec2):
         result = num/s
     return result
 
+def compute_iou(box1, box2):
+    rec1 = [box1[0], box1[1], box1[0] + box1[2], box1[1] + box1[3]]
+    rec2 = [box2[0], box2[1], box2[0] + box2[2], box2[1] + box2[3]]
+    S_rec1 = (rec1[2] - rec1[0]) * (rec1[3] - rec1[1])
+    S_rec2 = (rec2[2] - rec2[0]) * (rec2[3] - rec2[1])
+    left_line = max(rec1[1], rec2[1])
+    right_line = min(rec1[3], rec2[3])
+    top_line = max(rec1[0], rec2[0])
+    bottom_line = min(rec1[2], rec2[2])
+    if left_line >= right_line or top_line >= bottom_line:
+        iou = 0
+    else:
+        intersect = (right_line - left_line) * (bottom_line - top_line)
+        iou = max(float(intersect)/S_rec1, float(intersect)/S_rec2)
+    return iou
+
 def get_timestamp_dict(ts_dir):
     ts_dict = dict()
     for filename in os.listdir(ts_dir):

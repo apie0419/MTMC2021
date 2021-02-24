@@ -63,7 +63,7 @@ def prepare_data():
         if scene_dir.startswith("S0"):
             for camera_dir in os.listdir(os.path.join(INPUT_DIR, scene_dir)):
                 if camera_dir.startswith("c0"):
-                    result_dict = read_result_file(os.path.join(INPUT_DIR, scene_dir, camera_dir, "res.txt"))
+                    result_dict = read_result_file(os.path.join(INPUT_DIR, scene_dir, camera_dir, "res_opt.txt"))
                     result_list.append(result_dict)
                     camera_dirs.append(os.path.join(INPUT_DIR, scene_dir, camera_dir))
 

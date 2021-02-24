@@ -5,7 +5,7 @@ import numpy as np
 from tqdm          import tqdm
 from utils         import init_path, check_setting
 from utils.objects import Track
-from utils.utils   import getdistance
+from utils.utils   import getdistance, compute_iou
 
 init_path()
 
@@ -20,7 +20,7 @@ write_lock  = mp.Lock()
 SHORT_TRACK_TH = 2
 IOU_TH = 0.1
 STAY_TIME_TH = 20 # 30: 12.63, 20:12.80
-MOVE_DIS_TH = 30 #(m)
+MOVE_DIS_TH = 0.001
 
 def halfway_appear(track, roi):
     side_th = 100
@@ -59,6 +59,15 @@ def halfway_lost(track, roi):
         return True
     else:
         return False
+
+def sort_tracks(tracks):
+    sorted_tracks = dict()
+    for track_id in tracks:
+        track = tracks[track_id]
+        track.sort()
+        sorted_tracks[track_id] = track
+
+    return sorted_tracks
 
 def calu_track_distance(pre_tk, back_tk):
     lp = min(5, len(pre_tk)) * -1
@@ -173,19 +182,7 @@ def remove_overlapped_box(tracks, threshold):
             keep = True
             for cpr_bx in boxes:
                 box2 = cpr_bx["box"]
-                rec1 = [box1[0], box1[1], box1[0] + box1[2], box1[1] + box1[3]]
-                rec2 = [box2[0], box2[1], box2[0] + box2[2], box2[1] + box2[3]]
-                S_rec1 = (rec1[2] - rec1[0]) * (rec1[3] - rec1[1])
-                S_rec2 = (rec2[2] - rec2[0]) * (rec2[3] - rec2[1])
-                left_line = max(rec1[1], rec2[1])
-                right_line = min(rec1[3], rec2[3])
-                top_line = max(rec1[0], rec2[0])
-                bottom_line = min(rec1[2], rec2[2])
-                if left_line >= right_line or top_line >= bottom_line:
-                    iou = 0
-                else:
-                    intersect = (right_line - left_line) * (bottom_line - top_line)
-                    iou = max(float(intersect)/S_rec1, float(intersect)/S_rec2)
+                iou = compute_iou(box1, box2)
                 cur_bottom = box1[1] + box1[3]
                 cpr_bottom = box2[1] + box2[3]
                 if iou > threshold and cur_bottom < cpr_bottom:
@@ -313,11 +310,16 @@ def remove_no_moving_tracks(tracks, threshold):
     delete_ids = list()
     for track_id in tracks:
         track = tracks[track_id]
-        pt1 = track.gps_list[0]
-        pt2 = track.gps_list[-1]
-        move_dis = getdistance(pt1, pt2)
-        if move_dis < MOVE_DIS_TH:
+        box1 = track.box_list[0]
+        box2 = track.box_list[-1]
+        iou = compute_iou(box1, box2)
+        if iou > threshold:
             delete_ids.append(track_id)
+        # pt1 = track.gps_list[0]
+        # pt2 = track.gps_list[-1]
+        # move_dis = getdistance(pt1, pt2)
+        # if move_dis < threshold:
+        #     delete_ids.append(track_id)
 
     for id in delete_ids:
         tracks.pop(id)
@@ -332,7 +334,7 @@ def main(_input):
     
     tracks = remove_short_track(tracks, SHORT_TRACK_TH)
     tracks = remove_slow_tracks(tracks, STAY_TIME_TH)
-    tracks = remove_no_moving_tracks(tracks, MOVE_DIS_TH)
+    tracks = remove_no_moving_tracks(tracks, IOU_TH)
     tracks = connect_lost_tracks(tracks, roi)
     tracks = remove_edge_box(tracks, roi)
     tracks = remove_short_track(tracks, SHORT_TRACK_TH)
@@ -360,6 +362,7 @@ if __name__ == "__main__":
     for camera_dir in camera_dirs:
         camera_id = camera_dir.split('/')[-1]
         tracks = data[camera_id]
+        tracks = sort_tracks(tracks)
         _input.append([tracks, camera_dir])
     del data
     for _ in tqdm(pool.imap_unordered(main, _input), total=len(_input), desc=f"Post Processing"):
@@ -367,3 +370,4 @@ if __name__ == "__main__":
     
     pool.close()
     pool.join()
+    

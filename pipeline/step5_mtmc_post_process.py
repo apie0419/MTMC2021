@@ -31,7 +31,8 @@ def adaptation_box(box, resolution):
 
 def write_results(output_file, results, camera):
     with open(output_file, 'w') as f:
-        for frame_index, data in results.items():
+        res = sorted(results.items(), key=lambda r: r[0])
+        for frame_index, data in res:
             for det in data:
                 id_str = str(det["id"])
                 box_str = ",".join(list(map(str, det["box"])))
@@ -76,6 +77,7 @@ if __name__ == "__main__":
                     output_file = os.path.join(INPUT_DIR, scene_dir, camera_dir, "res_opt.txt")
                     video_size = get_video_size(video_path)
                     results = main(result_file, video_size)
+
                     write_results(output_file, results, camera_dir)
 
                     

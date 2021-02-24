@@ -1,6 +1,6 @@
 PATH:
-  INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/train"
-  VALID_PATH: "/home/apie/projects/MTMC2021/dataset/validation"
+  INPUT_PATH: "/home/apie/projects/MTMC2021/new_dataset/train"
+  VALID_PATH: "/home/apie/projects/MTMC2021/new_dataset/validation"
   OUTPUT_PATH: "/home/apie/projects/MTMC2021/mct_model/checkpoints"
 
 DEVICE:

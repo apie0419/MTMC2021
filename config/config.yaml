@@ -1,6 +1,6 @@
 PATH:
-  ROOT_PATH: "/home/apie/projects/MTMC2021/dataset"
-  INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/validation"
+  ROOT_PATH: "/home/apie/projects/MTMC2021/new_dataset"
+  INPUT_PATH: "/home/apie/projects/MTMC2021/new_dataset/validation"
 
 DEVICE:
   TYPE: "cuda"
@@ -15,7 +15,7 @@ REID:
 
 MCT:
   FEATURE_DIM: 2048
-  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/mct_epoch100.pth"
+  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/mct_epoch40.pth"
 
 DETECTION: "mask_rcnn"
 SCT: "tc"

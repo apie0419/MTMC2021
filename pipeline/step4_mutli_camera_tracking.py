@@ -157,6 +157,7 @@ def main(data, camera_dirs):
         query_scene = scene_dict[camera]
         query_tracks = data[camera]
         results[camera] = list()
+        
         result = manager.list()
         processes = list()
         data_queue = mp.Queue()
@@ -224,5 +225,5 @@ def main(data, camera_dirs):
     
 if __name__ == "__main__":
     data, camera_dirs = prepare_data()
-
     main(data, camera_dirs)
+    

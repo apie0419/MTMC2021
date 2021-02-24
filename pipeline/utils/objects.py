@@ -30,3 +30,7 @@ class Track(object):
         if t ==0:
             return 0
         return distance / t
+
+    def sort(self):
+        self.frame_list, self.ts_list, self.feature_list, self.box_list, self.gps_list = (list(t) for t in zip(*sorted(zip(self.frame_list, self.ts_list, self.feature_list, self.box_list, self.gps_list))))
+    

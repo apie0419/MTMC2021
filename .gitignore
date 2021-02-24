@@ -1,5 +1,6 @@
 __pycache__
 dataset/
+new_dataset/
 *.pth
 *.out
 .vscode/
