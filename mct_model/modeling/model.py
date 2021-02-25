@@ -17,7 +17,6 @@ class MCT(nn.Module):
         self.device = device
 
         self.fc1 = nn.Linear(dim, dim)
-        self.cos = nn.CosineSimilarity(dim=2)
         
         ## E
         self.fc2 = nn.Linear(dim, dim)
@@ -68,17 +67,17 @@ class MCT(nn.Module):
         """
         self.num_tracklets, self.feature_dim = f.size()
         f_prime, S = self.projection_ratio(f)
-        f_prime = f_prime.expand(self.num_tracklets, self.num_tracklets, self.feature_dim)
-        fij = f_prime * S
+        f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim)
+        fij = f * S
         fij = self.fc2(fij)
         fij = self.fc3(fij)
         fij = self.fc4(fij)
         
-        A = self.similarity(f_prime, fij)
+        A = self.similarity(f, fij)
         P = self.random_walk(A)
-        
+        P = F.softmax(P, dim=0)
         if self.training:
-            return P, f_prime[0], fij
+            return P, f[0], fij
         else:
             return P
 
@@ -99,4 +98,6 @@ if __name__ == "__main__":
     tracklets = torch.stack(tracklets).to(device)
         
     model = MCT(feature_dim * 2, device).to(device)
+    model.eval()
     output = model(tracklets)
+    print (output)

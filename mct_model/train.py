@@ -22,7 +22,8 @@ OUTPUT_PATH   = cfg.PATH.OUTPUT_PATH
 device = torch.device(DEVICE + ':' + str(GPU))
 model = build_model(cfg, device)
 tracklets_file = os.path.join(cfg.PATH.INPUT_PATH, "gt_features.txt")
-dataset = Dataset(tracklets_file, 5, 15)
+train_file = os.path.join(cfg.PATH.INPUT_PATH, "mtmc_train.txt")
+dataset = Dataset(tracklets_file, train_file)
 
 criterion = build_loss(device)
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
@@ -46,18 +47,13 @@ for epoch in range(1, EPOCHS+1):
     pbar.set_description(f"Epoch {epoch}, Triplet=0, Cross=0, Acc=0%")
     
     for data, target in dataset.prepare_data():
-        if data == None or target == None:
-            dataset_len -= 1
-            pbar.total = int(dataset_len / BATCH_SIZE) + 1
-            pbar.refresh()
-            continue
-
+        
         data, target = data.to(device), target.to(device)
         preds, f_prime, fij = model(data)
         triplet, cross = criterion(f_prime, fij, target, preds)
         triplet_loss += triplet.item()
         cross_loss += cross.item()
-        loss += triplet + cross
+        loss += cross + triplet
         
         if (iterations % BATCH_SIZE == 0) or (iterations == dataset_len):
             loss /= BATCH_SIZE
@@ -85,6 +81,6 @@ for epoch in range(1, EPOCHS+1):
     avg_acc = np.array(acc_list).mean()
     avg_cross = np.array(cross_loss_list).mean()
     avg_triplet = np.array(triplet_loss_list).mean()
-    pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:4f}, Avg_Acc={:.2f}%".format(epoch, avg_triplet, avg_cross, avg_acc))
+    pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Avg_Acc={:.2f}%".format(epoch, avg_triplet, avg_cross, avg_acc))
     pbar.close()
     torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}.pth"))

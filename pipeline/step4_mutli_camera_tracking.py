@@ -195,15 +195,15 @@ def main(data, camera_dirs):
         processes = list()
         data_queue = mp.Queue()
         stop.value = False
-        # for gpu in GPUS:
-        #     device = torch.device(DEVICE + ':' + str(gpu))
-        #     p = mp.Process(target=match_track, args=(device, data_queue, result))
-        #     p.start()
-        #     processes.append(p)
-        for _ in range(int(NUM_WORKERS/2)):
-            p = mp.Process(target=match_track_by_cosine, args=(data_queue, result))
+        for gpu in GPUS:
+            device = torch.device(DEVICE + ':' + str(gpu))
+            p = mp.Process(target=match_track, args=(device, data_queue, result))
             p.start()
             processes.append(p)
+        # for _ in range(int(NUM_WORKERS/2)):
+        #     p = mp.Process(target=match_track_by_cosine, args=(data_queue, result))
+        #     p.start()
+        #     processes.append(p)
 
         for obj_id in tqdm(query_tracks, desc=f"Processing Camera Dir {camera}"):
             gallery_tracks = list()

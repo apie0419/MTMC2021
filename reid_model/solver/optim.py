@@ -22,14 +22,3 @@ def make_optimizer(model, center_criterion):
 
     return optimizer, optimizer_center
 
-
-"""def optimizer_with_center(model, center_criterion):
-    normal_lr = opt.base_lr
-    center_lr = opt.center_lr
-    weight_decay = opt.weight_decay
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=normal_lr, weight_decay=weight_decay, amsgrad=True)
-    optimizer_center = torch.optim.SGD(center_criterion.parameters(), lr=center_lr)
-
-    return optimizer, optimizer_center"""
-

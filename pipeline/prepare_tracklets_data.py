@@ -20,6 +20,7 @@ GPUS        = cfg.DEVICE.GPUS
 BATCH_SIZE  = cfg.REID.BATCH_SIZE
 NUM_WORKERS = 4
 
+
 class ImageDataset(Dataset):
 
     def __init__(self, dataset, transform=None):
