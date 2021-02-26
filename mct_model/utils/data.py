@@ -4,13 +4,16 @@ from tqdm import tqdm
 
 class Dataset(object):
 
-    def __init__(self, feature_file, tracklets_file):
+    def __init__(self, feature_file, easy_tracklets_file, hard_tracklets_file):
         self.feature_dict = self.read_feature_file(feature_file)
-        self.data_list = self.read_tracklets_file(tracklets_file)
+        self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)
+        self.hard_data_list = self.read_tracklets_file(hard_tracklets_file)
 
-    def __len__(self):
-        
-        return len(self.data_list)
+    def hard_len(self):
+        return len(self.hard_data_list)
+
+    def easy_len(self):
+        return len(self.easy_data_list)
 
     def read_feature_file(self, filename):
         feature_dict = dict()
@@ -44,9 +47,15 @@ class Dataset(object):
         
         return data_list
 
-    def prepare_data(self):
-        random.shuffle(self.data_list)
-        for data in self.data_list:
+    def prepare_data(self, _type):
+        
+        if _type == "easy":
+            data_list = self.easy_data_list            
+        elif _type == "hard":
+            data_list = self.hard_data_list
+        
+        random.shuffle(data_list)
+        for data in data_list:
             q_cam = data[0]
             g_cam = data[1]
             q_id = data[2]
@@ -70,3 +79,12 @@ class Dataset(object):
             tracklets.extend(gallery_tracks)
             tracklets_ft = torch.stack(tracklets)
             yield tracklets_ft, label
+
+if __name__ == '__main__':
+    easy_file = "/home/apie/projects/MTMC2021/dataset/train/mtmc_train_easy.txt"
+    hard_file = "/home/apie/projects/MTMC2021/dataset/train/mtmc_train_hard.txt"
+    feature_file = "/home/apie/projects/MTMC2021/dataset/train/gt_features.txt"
+    dataset = Dataset(feature_file, easy_file, hard_file)
+    dataset_iter = dataset.prepare_data("easy")
+    for _ in dataset_iter:
+        pass

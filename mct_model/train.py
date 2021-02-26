@@ -15,15 +15,17 @@ init_path()
 DEVICE        = cfg.DEVICE.TYPE
 GPU           = cfg.DEVICE.GPU
 LEARNING_RATE = cfg.MCT.LEARNING_RATE
-EPOCHS        = cfg.MCT.EPOCHS
+EASY_EPOCHS   = cfg.MCT.EASY_EPOCHS
+HARD_EPOCHS   = cfg.MCT.HARD_EPOCHS
 BATCH_SIZE    = cfg.MCT.BATCH_SIZE
 OUTPUT_PATH   = cfg.PATH.OUTPUT_PATH
 
 device = torch.device(DEVICE + ':' + str(GPU))
 model = build_model(cfg, device)
 tracklets_file = os.path.join(cfg.PATH.INPUT_PATH, "gt_features.txt")
-train_file = os.path.join(cfg.PATH.INPUT_PATH, "mtmc_train.txt")
-dataset = Dataset(tracklets_file, train_file)
+easy_train_file = os.path.join(cfg.PATH.INPUT_PATH, "mtmc_easy.txt")
+hard_train_file = os.path.join(cfg.PATH.INPUT_PATH, "mtmc_hard.txt")
+dataset = Dataset(tracklets_file, easy_train_file, hard_train_file)
 
 criterion = build_loss(device)
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
@@ -32,21 +34,34 @@ model.train()
 if not os.path.exists(OUTPUT_PATH):
     os.mkdir(OUTPUT_PATH)
 
-for epoch in range(1, EPOCHS+1):
+lr = LEARNING_RATE
+epochs = EASY_EPOCHS + HARD_EPOCHS
+
+for epoch in range(1, epochs):
     if epoch % 10 == 0:
-        LEARNING_RATE *= 0.8
-        optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
+        lr *= 0.8
+        optimizer = Adam(model.parameters(), lr=lr)
+    if epoch == EASY_EPOCHS + 1:
+        lr = LEARNING_RATE
+
     count = 0.
     loss = 0.
     triplet_loss = 0.
     cross_loss = 0.
     triplet_loss_list, cross_loss_list, acc_list = list(), list(), list()
     iterations = 1
-    dataset_len = len(dataset)
-    pbar = tqdm(total=int(dataset_len / BATCH_SIZE) + 1)
-    pbar.set_description(f"Epoch {epoch}, Triplet=0, Cross=0, Acc=0%")
+    if epoch > EASY_EPOCHS:
+        dataset_len = len(dataset.hard_data_list)
+        pbar = tqdm(total=int(dataset_len / BATCH_SIZE) + 1)
+        pbar.set_description(f"Epoch {epoch}, Triplet=0, Cross=0, Acc=0%")
+        dataset_iter = dataset.prepare_data("hard")
+    else:
+        dataset_len = len(dataset.easy_data_list)
+        pbar = tqdm(total=int(dataset_len / BATCH_SIZE) + 1)
+        pbar.set_description(f"Epoch {epoch}, Triplet=0, Cross=0, Acc=0%")
+        dataset_iter = dataset.prepare_data("easy")
     
-    for data, target in dataset.prepare_data():
+    for data, target in dataset_iter:
         
         data, target = data.to(device), target.to(device)
         preds, f_prime, fij = model(data)
@@ -83,4 +98,5 @@ for epoch in range(1, EPOCHS+1):
     avg_triplet = np.array(triplet_loss_list).mean()
     pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Avg_Acc={:.2f}%".format(epoch, avg_triplet, avg_cross, avg_acc))
     pbar.close()
-    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}.pth"))
+    if epoch % 10 == 0:
+        torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}.pth"))

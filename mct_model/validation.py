@@ -15,32 +15,36 @@ VALID_PATH = cfg.PATH.VALID_PATH
 
 device = torch.device(DEVICE + ':' + str(5))
 tracklets_file = os.path.join(VALID_PATH, "gt_features.txt")
-dataset = Dataset(tracklets_file, 20, 40)
+easy_file = os.path.join(VALID_PATH, "mtmc_easy.txt")
+hard_file = os.path.join(VALID_PATH, "mtmc_hard.txt")
+dataset = Dataset(tracklets_file, easy_file, hard_file)
 checkpoint = torch.load(WEIGHT, map_location=device)
 model = build_model(cfg, device)
 model.load_state_dict(checkpoint)
 model.eval()
 
-dataset_len = len(dataset)
+dataset_len = len(dataset.hard_data_list) + len(dataset.easy_data_list)
 count = 0.
 
 pbar = tqdm(total=dataset_len)
 
 with torch.no_grad():
-    for data, target in dataset.prepare_data():
-        if data == None or target == None:
-            dataset_len -= 1
-            pbar.total -= 1
-            pbar.refresh()
-            continue
 
-        data, target = data.to(device), target.to(device)
-        preds = model(data)
-        # print (preds, target[0].item())
-        if preds.argmax().item() == target[0].item():
-            count += 1
-        
-        pbar.update()
+    for _type in ["easy", "hard"]:
+        for data, target in dataset.prepare_data(_type):
+            if data == None or target == None:
+                dataset_len -= 1
+                pbar.total -= 1
+                pbar.refresh()
+                continue
+
+            data, target = data.to(device), target.to(device)
+            preds = model(data)
+            # print (preds, target[0].item())
+            if preds.argmax().item() == target[0].item():
+                count += 1
+            
+            pbar.update()
 
 val_acc = count / dataset_len * 100.
 pbar.close()

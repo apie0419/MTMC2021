@@ -50,7 +50,8 @@ class MCT(nn.Module):
         return A
 
     def random_walk(self, A):
-        D = torch.diag(torch.sum(A, axis=1))
+        
+        D = torch.diag(torch.sum(A, axis=1) - torch.diagonal(A))
         T = torch.inverse(D) @ A
         ind = np.diag_indices(T.size()[0])
         T[ind[0], ind[1]] = torch.zeros(T.size()[0]).to(self.device)
@@ -75,6 +76,11 @@ class MCT(nn.Module):
         
         A = self.similarity(f, fij)
         P = self.random_walk(A)
+        # 
+        # print (A[0][1:])
+        # P = A[0][1:]
+        # P = P / P.sum()
+        # print (P)
         P = F.softmax(P, dim=0)
         if self.training:
             return P, f[0], fij

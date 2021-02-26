@@ -6,12 +6,14 @@ from config      import cfg
 
 init_path()
 
-tracklets_file = os.path.join(cfg.PATH.INPUT_PATH, "gt_features.txt")
-output_file = os.path.join(cfg.PATH.INPUT_PATH, "mtmc_train.txt")
+path = cfg.PATH.VALID_PATH
+tracklets_file = os.path.join(path, "gt_features.txt")
+easy_output_file = os.path.join(path, "mtmc_easy.txt")
+hard_output_file = os.path.join(path, "mtmc_hard.txt")
 min_gallery_num = 5
 max_gallery_num = 15
 
-def read_tracklets_file(filename):
+def read_feature_file(filename):
     data_dict = dict()
     with open(filename, 'r') as f:
         for line in tqdm(f.readlines(), desc="Reading Tracklets File"):
@@ -29,8 +31,8 @@ def read_tracklets_file(filename):
     
     return data_dict
 
-def write_results(res_dict):
-    with open(output_file, "w+") as f:
+def write_results(res_dict, filename):
+    with open(filename, "w+") as f:
         for q_camera in res_dict:
             for q_id in res_dict[q_camera]:
                 for data in res_dict[q_camera][q_id]:
@@ -39,15 +41,17 @@ def write_results(res_dict):
                     gallery_ids = data["gallery"]
                     line = q_camera + ' ' + g_camera + ' ' + q_id + ' ' + ",".join(gallery_ids) + ' ' + str(label) + '\n'
                     f.write(line)
-
-
+    
 def main():
-    data_dict = read_tracklets_file(tracklets_file)
-    res_dict = dict()
+    data_dict = read_feature_file(tracklets_file)
+    hard_res_dict = dict()
+    easy_res_dict = dict()
     for camera_id in tqdm(data_dict, desc="Preparing Data"):
-        res_dict[camera_id] = dict()
+        hard_res_dict[camera_id] = dict()
+        easy_res_dict[camera_id] = dict()
         for det_id in data_dict[camera_id]:
-            res_dict[camera_id][det_id] = list()
+            hard_res_dict[camera_id][det_id] = list()
+            easy_res_dict[camera_id][det_id] = list()
             query_track = data_dict[camera_id][det_id]
             query_track = torch.tensor(query_track)
             mean = query_track.mean(dim=0)
@@ -89,7 +93,8 @@ def main():
                 ids = list(cam_data.keys())
                 random.shuffle(ids)
                 half_num_objects = int(num_objects/2)
-                
+
+                # hard sample
                 # hard negetive
                 for id in ids:
                     if (id == det_id) or (num_objects == half_num_objects):
@@ -109,54 +114,54 @@ def main():
                         hard_gallery_tracks.append(id)
                         num_objects -= 1
 
-                if len(hard_gallery_tracks) == 1:
-                    continue
-
-                # easy negetive
-                for id in ids:
-                    if (id == det_id) or (num_objects == 0) or (id in hard_gallery_tracks):
-                        continue
-                    
-                    hard_gallery_tracks.append(id)
-                    num_objects -= 1
+                if len(hard_gallery_tracks) > 1:
+                    # easy negetive
+                    for id in ids:
+                        if (num_objects == 0) or (id in hard_gallery_tracks):
+                            continue
+                        
+                        hard_gallery_tracks.append(id)
+                        num_objects -= 1
 
                 num_objects = random.randint(_min, _max)
                 
+                ## easy sample
+
                 for id in ids:
-                    if (id == det_id) or (num_objects == 0) or (id in hard_gallery_tracks):
+                    if (num_objects == 0) or (id in hard_gallery_tracks):
                         continue
                     
                     easy_gallery_tracks.append(id)
                     num_objects -= 1
-                
-                if len(hard_gallery_tracks) == 1 or len(easy_gallery_tracks) == 1:
-                    continue
 
-                orders = list(range(len(hard_gallery_tracks)))
-                tmp = list(zip(orders, hard_gallery_tracks))
-                random.shuffle(tmp)
-                orders, hard_gallery_tracks = zip(*tmp)
-                label = orders.index(0)
-                data = {
-                    "gallery": hard_gallery_tracks,
-                    "label": label,
-                    "camera": camid
-                }
-                res_dict[camera_id][det_id].append(data)
+                if len(hard_gallery_tracks) > 2:
+                    orders = list(range(len(hard_gallery_tracks)))
+                    tmp = list(zip(orders, hard_gallery_tracks))
+                    random.shuffle(tmp)
+                    orders, hard_gallery_tracks = zip(*tmp)
+                    label = orders.index(0)
+                    data = {
+                        "gallery": hard_gallery_tracks,
+                        "label": label,
+                        "camera": camid
+                    }
+                    hard_res_dict[camera_id][det_id].append(data)
 
-                orders = list(range(len(easy_gallery_tracks)))
-                tmp = list(zip(orders, easy_gallery_tracks))
-                random.shuffle(tmp)
-                orders, easy_gallery_tracks = zip(*tmp)
-                label = orders.index(0)
-                data = {
-                    "gallery": easy_gallery_tracks,
-                    "label": label,
-                    "camera": camid
-                }
-                res_dict[camera_id][det_id].append(data)
+                if len(easy_gallery_tracks) > 2:
+                    orders = list(range(len(easy_gallery_tracks)))
+                    tmp = list(zip(orders, easy_gallery_tracks))
+                    random.shuffle(tmp)
+                    orders, easy_gallery_tracks = zip(*tmp)
+                    label = orders.index(0)
+                    data = {
+                        "gallery": easy_gallery_tracks,
+                        "label": label,
+                        "camera": camid
+                    }
+                    easy_res_dict[camera_id][det_id].append(data)
 
-    write_results(res_dict)
+    write_results(hard_res_dict, hard_output_file)
+    write_results(easy_res_dict, easy_output_file)
 
 if __name__ == "__main__":
     main()
