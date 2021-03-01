@@ -60,7 +60,7 @@ for epoch in range(1, epochs + 1):
         triplet, cross = criterion(f_prime, fij, target, preds)
         triplet_loss += triplet.item()
         cross_loss += cross.item()
-        loss += cross
+        loss += triplet + cross
         
         if (iterations % BATCH_SIZE == 0) or (iterations == dataset_len):
             loss /= BATCH_SIZE
