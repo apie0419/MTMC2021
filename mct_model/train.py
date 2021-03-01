@@ -15,8 +15,7 @@ init_path()
 DEVICE        = cfg.DEVICE.TYPE
 GPU           = cfg.DEVICE.GPU
 LEARNING_RATE = cfg.MCT.LEARNING_RATE
-EASY_EPOCHS   = cfg.MCT.EASY_EPOCHS
-HARD_EPOCHS   = cfg.MCT.HARD_EPOCHS
+EPOCHS        = cfg.MCT.EPOCHS
 BATCH_SIZE    = cfg.MCT.BATCH_SIZE
 OUTPUT_PATH   = cfg.PATH.OUTPUT_PATH
 
@@ -35,14 +34,12 @@ if not os.path.exists(OUTPUT_PATH):
     os.mkdir(OUTPUT_PATH)
 
 lr = LEARNING_RATE
-epochs = EASY_EPOCHS + HARD_EPOCHS
+epochs = EPOCHS
 
-for epoch in range(1, epochs):
+for epoch in range(1, epochs + 1):
     if epoch % 10 == 0:
         lr *= 0.8
         optimizer = Adam(model.parameters(), lr=lr)
-    if epoch == EASY_EPOCHS + 1:
-        lr = LEARNING_RATE
 
     count = 0.
     loss = 0.
@@ -50,16 +47,11 @@ for epoch in range(1, epochs):
     cross_loss = 0.
     triplet_loss_list, cross_loss_list, acc_list = list(), list(), list()
     iterations = 1
-    if epoch > EASY_EPOCHS:
-        dataset_len = len(dataset.hard_data_list)
-        pbar = tqdm(total=int(dataset_len / BATCH_SIZE) + 1)
-        pbar.set_description(f"Epoch {epoch}, Triplet=0, Cross=0, Acc=0%")
-        dataset_iter = dataset.prepare_data("hard")
-    else:
-        dataset_len = len(dataset.easy_data_list)
-        pbar = tqdm(total=int(dataset_len / BATCH_SIZE) + 1)
-        pbar.set_description(f"Epoch {epoch}, Triplet=0, Cross=0, Acc=0%")
-        dataset_iter = dataset.prepare_data("easy")
+
+    dataset_len = dataset.hard_len() + dataset.easy_len()
+    pbar = tqdm(total=int(dataset_len / BATCH_SIZE) + 1)
+    pbar.set_description(f"Epoch {epoch}, Triplet=0, Cross=0, Acc=0%")
+    dataset_iter = dataset.prepare_data("merge")
     
     for data, target in dataset_iter:
         
@@ -68,7 +60,7 @@ for epoch in range(1, epochs):
         triplet, cross = criterion(f_prime, fij, target, preds)
         triplet_loss += triplet.item()
         cross_loss += cross.item()
-        loss += cross + triplet
+        loss += cross
         
         if (iterations % BATCH_SIZE == 0) or (iterations == dataset_len):
             loss /= BATCH_SIZE
@@ -98,5 +90,5 @@ for epoch in range(1, epochs):
     avg_triplet = np.array(triplet_loss_list).mean()
     pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Avg_Acc={:.2f}%".format(epoch, avg_triplet, avg_cross, avg_acc))
     pbar.close()
-    if epoch % 10 == 0:
-        torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}.pth"))
+    # if epoch % 10 == 0:
+    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}.pth"))

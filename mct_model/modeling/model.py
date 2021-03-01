@@ -50,8 +50,9 @@ class MCT(nn.Module):
         return A
 
     def random_walk(self, A):
-        
-        D = torch.diag(torch.sum(A, axis=1) - torch.diagonal(A))
+        total = torch.sum(A, axis=1) - torch.diagonal(A)
+        total = total.clamp(min=1e-10)
+        D = torch.diag(total)
         T = torch.inverse(D) @ A
         ind = np.diag_indices(T.size()[0])
         T[ind[0], ind[1]] = torch.zeros(T.size()[0]).to(self.device)
@@ -67,12 +68,12 @@ class MCT(nn.Module):
         Return an affinity map, size(f[0], f[0])
         """
         self.num_tracklets, self.feature_dim = f.size()
+        f = self.fc2(f)
+        f = self.fc3(f)
+        f = self.fc4(f)
         f_prime, S = self.projection_ratio(f)
         f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim)
         fij = f * S
-        fij = self.fc2(fij)
-        fij = self.fc3(fij)
-        fij = self.fc4(fij)
         
         A = self.similarity(f, fij)
         P = self.random_walk(A)
@@ -81,6 +82,9 @@ class MCT(nn.Module):
         # P = A[0][1:]
         # P = P / P.sum()
         # print (P)
+        P = (P - P.mean())
+        P[P < 0] = 0
+        P = P * 100
         P = F.softmax(P, dim=0)
         if self.training:
             return P, f[0], fij

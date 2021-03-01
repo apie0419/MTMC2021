@@ -50,9 +50,11 @@ class Dataset(object):
     def prepare_data(self, _type):
         
         if _type == "easy":
-            data_list = self.easy_data_list            
+            data_list = self.easy_data_list
         elif _type == "hard":
             data_list = self.hard_data_list
+        elif _type == "merge":
+            data_list = self.easy_data_list + self.hard_data_list
         
         random.shuffle(data_list)
         for data in data_list:

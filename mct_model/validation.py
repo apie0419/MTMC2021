@@ -23,8 +23,10 @@ model = build_model(cfg, device)
 model.load_state_dict(checkpoint)
 model.eval()
 
-dataset_len = len(dataset.hard_data_list) + len(dataset.easy_data_list)
+dataset_len = dataset.hard_len() + dataset.easy_len()
 count = 0.
+easy = 0.
+hard = 0.
 
 pbar = tqdm(total=dataset_len)
 
@@ -43,9 +45,15 @@ with torch.no_grad():
             # print (preds, target[0].item())
             if preds.argmax().item() == target[0].item():
                 count += 1
-            
+                if _type == "easy":
+                    easy += 1
+                else:
+                    hard += 1
             pbar.update()
 
 val_acc = count / dataset_len * 100.
+hard_acc = hard / len(dataset.hard_data_list) * 100.
+easy_acc = easy / len(dataset.easy_data_list) * 100.
 pbar.close()
-print ("Validation Accuracy:{:.2f}%".format(val_acc))
+print ("Easy Accuracy:{:.2f}%, Hard Accuracy:{:.2f}%".format(easy_acc, hard_acc))
+# print ("Validation Accuracy:{:.2f}%".format(val_acc))
