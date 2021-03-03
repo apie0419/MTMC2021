@@ -7,7 +7,6 @@ def weights_init_kaiming(m):
     classname = m.__class__.__name__
     nn.init.kaiming_normal_(m.weight, a=0, mode='fan_out')
     nn.init.constant_(m.bias, 0.0)
-
 class MCT(nn.Module):
     
     def __init__(self, dim, device):
@@ -23,20 +22,25 @@ class MCT(nn.Module):
         self.fc3 = nn.Linear(dim, dim)
         self.fc4 = nn.Linear(dim, dim)
 
+        self.fc1.apply(weights_init_kaiming)
+        self.fc2.apply(weights_init_kaiming)
+        self.fc3.apply(weights_init_kaiming)
+        self.fc4.apply(weights_init_kaiming)
+
     def attn(self, _input):
         x = self.fc1(_input)
-        output = x @ x.T
+        output = x @ _input.T
 
-        return x, output
+        return output
 
     def projection_ratio(self, f):
 
-        f_prime, scores = self.attn(f)
-        fj_prime_mag = torch.norm(f_prime, p=2, dim=1) ** 2
+        scores = self.attn(f)
+        fj_prime_mag = torch.norm(f, p=2, dim=1) ** 2
         S = scores / fj_prime_mag
         S = S.view(self.num_tracklets, self.num_tracklets, 1)
 
-        return f_prime, S
+        return S
 
     def similarity(self, f_prime, fij):  
         assert f_prime.size() == (self.num_tracklets, self.num_tracklets, self.feature_dim)
@@ -71,7 +75,7 @@ class MCT(nn.Module):
         f = self.fc2(f)
         f = self.fc3(f)
         f = self.fc4(f)
-        f_prime, S = self.projection_ratio(f)
+        S = self.projection_ratio(f)
         f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim)
         fij = f * S
         
@@ -96,7 +100,7 @@ if __name__ == "__main__":
     num_tracklets = 3
     feature_dim = 2048
     tracklets = list()
-    device = torch.device("cuda:5")
+    device = torch.device("cuda:1")
     for _ in range(num_tracklets):
         num_objects = random.randint(3, 10)
         tracklet = torch.rand((num_objects, feature_dim))

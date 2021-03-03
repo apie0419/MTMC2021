@@ -20,7 +20,7 @@ ROOT_DIR    = cfg.PATH.ROOT_PATH
 DEVICE      = cfg.DEVICE.TYPE
 GPUS        = cfg.DEVICE.GPUS
 BATCH_SIZE  = cfg.REID.BATCH_SIZE
-NUM_WORKERS = 4
+NUM_WORKERS = 1
 
 ts_dict = get_timestamp_dict(os.path.join(ROOT_DIR, "cam_timestamp"))
 fps_dict = get_fps_dict(INPUT_DIR)

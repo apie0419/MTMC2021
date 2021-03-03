@@ -167,7 +167,7 @@ def match_track(device, data_queue, result):
         with torch.no_grad():
             data = data.to(device)
             preds = model(data)
-            if preds.max().item() > 0.8:
+            if preds.max().item() > 0.6:
                 match_id = ids[preds.argmax().item()]
                 query_track.id = match_id
                 match = True

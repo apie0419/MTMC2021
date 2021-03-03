@@ -1,4 +1,4 @@
-import os, cv2, time
+import os, cv2
 import multiprocessing as mp
 
 from tqdm  import tqdm
@@ -10,7 +10,7 @@ from config import cfg
 
 check_setting(cfg)
 
-TRAIN_PATH  = os.path.join(cfg.PATH.ROOT_PATH, "train")
+TRAIN_PATH  = os.path.join(cfg.PATH.ROOT_PATH, "validation")
 NUM_WORKERS = mp.cpu_count()
 
 class Box(object):

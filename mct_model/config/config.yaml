@@ -1,15 +1,15 @@
 PATH:
-  INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/train"
+  TRAIN_PATH: "/home/apie/projects/MTMC2021/dataset/train"
   VALID_PATH: "/home/apie/projects/MTMC2021/dataset/validation"
   OUTPUT_PATH: "/home/apie/projects/MTMC2021/mct_model/checkpoints"
 
 DEVICE:
   TYPE: "cuda"
-  GPU: 5
+  GPU: 0
 
 MCT: 
   FEATURE_DIM: 2048
   LEARNING_RATE: 0.0001
-  EPOCHS: 200
+  EPOCHS: 40
   BATCH_SIZE: 64
-  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/mct_epoch100.pth"
+  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/mct_epoch40.pth"

@@ -14,7 +14,7 @@ from config import cfg
 
 check_setting(cfg)
 
-INPUT_DIR   = os.path.join(cfg.PATH.ROOT_PATH, "train")
+INPUT_DIR   = os.path.join(cfg.PATH.ROOT_PATH, "validation")
 DEVICE      = cfg.DEVICE.TYPE
 GPUS        = cfg.DEVICE.GPUS
 BATCH_SIZE  = cfg.REID.BATCH_SIZE

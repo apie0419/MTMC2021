@@ -21,9 +21,9 @@ OUTPUT_PATH   = cfg.PATH.OUTPUT_PATH
 
 device = torch.device(DEVICE + ':' + str(GPU))
 model = build_model(cfg, device)
-tracklets_file = os.path.join(cfg.PATH.INPUT_PATH, "gt_features.txt")
-easy_train_file = os.path.join(cfg.PATH.INPUT_PATH, "mtmc_easy.txt")
-hard_train_file = os.path.join(cfg.PATH.INPUT_PATH, "mtmc_hard.txt")
+tracklets_file = os.path.join(cfg.PATH.TRAIN_PATH, "gt_features.txt")
+easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_easy.txt")
+hard_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_hard.txt")
 dataset = Dataset(tracklets_file, easy_train_file, hard_train_file)
 
 criterion = build_loss(device)
@@ -48,10 +48,10 @@ for epoch in range(1, epochs + 1):
     triplet_loss_list, cross_loss_list, acc_list = list(), list(), list()
     iterations = 1
 
-    dataset_len = dataset.hard_len() + dataset.easy_len()
+    dataset_len = dataset.easy_len()
     pbar = tqdm(total=int(dataset_len / BATCH_SIZE) + 1)
     pbar.set_description(f"Epoch {epoch}, Triplet=0, Cross=0, Acc=0%")
-    dataset_iter = dataset.prepare_data("merge")
+    dataset_iter = dataset.prepare_data("easy")
     
     for data, target in dataset_iter:
         

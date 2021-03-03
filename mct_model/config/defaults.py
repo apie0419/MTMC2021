@@ -8,7 +8,7 @@ _C.PATH = CN()
 _C.DEVICE = CN()
 _C.MCT = CN()
 
-_C.PATH.INPUT_PATH = '<path_to_input_path>'
+_C.PATH.TRAIN_PATH = '<path_to_train_path>'
 _C.PATH.VALID_PATH = '<path_to_valid_path>'
 _C.PATH.OUTPUT_PATH = '<path_to_output_path>'
 
