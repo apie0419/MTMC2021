@@ -3,5 +3,6 @@ dataset/
 new_dataset/
 *.pth
 *.out
+*.jpg
+*.txt
 .vscode/
-eval/

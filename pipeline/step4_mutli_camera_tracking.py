@@ -74,7 +74,7 @@ def prepare_data():
     
     files = list()
     for camera_dir in camera_dirs:
-        files.append(os.path.join(camera_dir, "all_features_post.txt"))
+        files.append(os.path.join(camera_dir, f"{cfg.SCT}_{cfg.DETECTION}_all_features_post.txt"))
         
     pool = mp.Pool(NUM_WORKERS)
 
@@ -208,7 +208,6 @@ def main(data, camera_dirs):
         for obj_id in tqdm(query_tracks, desc=f"Processing Camera Dir {camera}"):
             gallery_tracks = list()
             query_track = query_tracks[obj_id]
-            qid = query_track.id
             speed = query_track.speed()
             if speed == 0:
                 continue

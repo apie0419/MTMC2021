@@ -7,6 +7,7 @@ def weights_init_kaiming(m):
     classname = m.__class__.__name__
     nn.init.kaiming_normal_(m.weight, a=0, mode='fan_out')
     nn.init.constant_(m.bias, 0.0)
+
 class MCT(nn.Module):
     
     def __init__(self, dim, device):
@@ -36,11 +37,16 @@ class MCT(nn.Module):
     def projection_ratio(self, f):
 
         scores = self.attn(f)
+        ind = np.diag_indices(scores.size()[0])
+        scores[ind[0], ind[1]] = torch.zeros(scores.size()[0]).to(self.device)
+        
         fj_prime_mag = torch.norm(f, p=2, dim=1) ** 2
         S = scores / fj_prime_mag
         S = S.view(self.num_tracklets, self.num_tracklets, 1)
+        
+        scores = F.softmax(scores, dim=0)
 
-        return S
+        return scores, S
 
     def similarity(self, f_prime, fij):  
         assert f_prime.size() == (self.num_tracklets, self.num_tracklets, self.feature_dim)
@@ -72,10 +78,10 @@ class MCT(nn.Module):
         Return an affinity map, size(f[0], f[0])
         """
         self.num_tracklets, self.feature_dim = f.size()
-        f = self.fc2(f)
-        f = self.fc3(f)
-        f = self.fc4(f)
-        S = self.projection_ratio(f)
+        f = F.relu(self.fc2(f))
+        f = F.relu(self.fc3(f))
+        f = F.relu(self.fc4(f))
+        scores, S = self.projection_ratio(f)
         f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim)
         fij = f * S
         

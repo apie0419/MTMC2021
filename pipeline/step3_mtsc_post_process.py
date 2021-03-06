@@ -1,4 +1,4 @@
-import os, cv2
+import os, cv2, math
 import multiprocessing as mp
 import numpy as np
 
@@ -14,13 +14,13 @@ from config import cfg
 check_setting(cfg)
 
 INPUT_DIR   = cfg.PATH.INPUT_PATH
-NUM_WORKERS = mp.cpu_count()
+NUM_WORKERS = int(mp.cpu_count()/2)
 write_lock  = mp.Lock()
 
 SHORT_TRACK_TH = 2
 IOU_TH = 0.1
-STAY_TIME_TH = 20 # 30: 12.63, 20:12.80
-MOVE_DIS_TH = 0.001
+MOVE_DIS_TH = 0.01
+SIZE_TH = 500
 
 def halfway_appear(track, roi):
     side_th = 100
@@ -89,10 +89,10 @@ def preprocess_roi(roi):
     h, w, _ = roi.shape
     width_erode = int(w * 0.1)
     height_erode = int(h * 0.1)
-    left = roi[:, 0:width_erode, :]
-    right = roi[:, w-width_erode:w, :]
-    top = roi[0:height_erode, :, :]
-    bottom = roi[h-height_erode:h, :, :]
+    roi[:, 0:width_erode, :] = 0
+    roi[:, w-width_erode:w, :] = 0
+    roi[0:height_erode, :, :] = 0
+    roi[h-height_erode:h, :, :] = 0
 
     return roi
 
@@ -110,7 +110,9 @@ def read_features_file(file):
         ts = float(l[6])
         gps = list(map(float, l[7:9]))
         features = np.array(list(map(float, l[9:])), np.float32)
-        
+        if box[2] * box[3] < SIZE_TH:
+            continue
+
         write_lock.acquire()
         if id not in data[camera_dir]:
             data[camera_dir][id] = Track()
@@ -136,7 +138,7 @@ def prepare_data():
     
     files = list()
     for camera_dir in camera_dirs:
-        files.append(os.path.join(camera_dir, "all_features.txt"))
+        files.append(os.path.join(camera_dir, f"{cfg.SCT}_{cfg.DETECTION}_all_features.txt"))
         
     pool = mp.Pool(NUM_WORKERS)
 
@@ -250,21 +252,30 @@ def remove_edge_box(tracks, roi):
         else:
             tracks[track_id].box_list = boxes[start:end]
             tracks[track_id].feature_list = tracks[track_id].feature_list[start:end]
-            tracks[track_id].frame_list = tracks[track_id].frame_list[start:end]
+            tracks[track_id].frame_list = tracks[ track_id].frame_list[start:end]
             tracks[track_id].gps_list = tracks[track_id].gps_list[start:end]
             tracks[track_id].ts_list = tracks[track_id].ts_list[start:end]
 
     return tracks
 
-def remove_slow_tracks(tracks, threshold):
-    delete_ids = list()
-    for track_id in tracks:
+def remove_abnormal_speed_tracks(tracks):
+    ids = np.array(list(tracks.keys()))
+    speeds = list()
+    for track_id in ids.tolist():
         track = tracks[track_id]
-        stay_time = track.ts_list[-1] - track.ts_list[0]
-        if stay_time > threshold:
-            delete_ids.append(track_id)
+        speeds.append(track.speed())
+    speeds = np.array(speeds)
+    mean = speeds.mean()
+    std = speeds.std()
+    distribution = (speeds - mean) / std
+    thres = 2
+    while True:
+        delete_ids = ids[abs(distribution) > thres]
+        if float(delete_ids.shape[0]) / ids.shape[0] <= 0.03:
+            break
+        thres += 0.5
 
-    for id in delete_ids:
+    for id in delete_ids.tolist():
         tracks.pop(id)
     
     return tracks
@@ -306,22 +317,34 @@ def connect_lost_tracks(tracks, roi):
     
     return tracks
 
-def remove_no_moving_tracks(tracks, threshold):
+def remove_no_moving_tracks(tracks, iou_threshold, dis_threshold):
     delete_ids = list()
-    for track_id in tracks:
+    ids = np.array(list(tracks.keys()))
+    stay_time = list()
+    for track_id in ids.tolist():
         track = tracks[track_id]
         box1 = track.box_list[0]
         box2 = track.box_list[-1]
         iou = compute_iou(box1, box2)
-        if iou > threshold:
+        t1 = track.frame_list[0]
+        t2 = track.frame_list[-1]
+        stay_time.append(t2-t1)
+        if iou > iou_threshold:
             delete_ids.append(track_id)
-        # pt1 = track.gps_list[0]
-        # pt2 = track.gps_list[-1]
-        # move_dis = getdistance(pt1, pt2)
-        # if move_dis < threshold:
-        #     delete_ids.append(track_id)
+    stay_time = np.array(stay_time)
+    mean = stay_time.mean()
+    std = stay_time.std()
+    distribution = (stay_time - mean) / std
+    thres = 2
+    while True:
+        delete = ids[distribution > thres]
+        if float(delete.shape[0]) / ids.shape[0] <= 0.03:
+            break
+        thres += 0.5
 
-    for id in delete_ids:
+    delete_ids.extend(delete.tolist())
+        
+    for id in set(delete_ids):
         tracks.pop(id)
     
     return tracks
@@ -331,14 +354,16 @@ def main(_input):
     roi_path = os.path.join(camera_dir, 'roi.jpg')
     roi_src = cv2.imread(roi_path)
     roi = preprocess_roi(roi_src)
+    
     tracks = remove_short_track(tracks, SHORT_TRACK_TH)
     tracks = connect_lost_tracks(tracks, roi)
     tracks = remove_edge_box(tracks, roi)
     tracks = remove_short_track(tracks, SHORT_TRACK_TH)
-    tracks = remove_slow_tracks(tracks, STAY_TIME_TH)
-    tracks = remove_no_moving_tracks(tracks, IOU_TH)
+    tracks = remove_abnormal_speed_tracks(tracks)
+    tracks = remove_no_moving_tracks(tracks, IOU_TH, MOVE_DIS_TH)
+    
     tracks = remove_overlapped_box(tracks, IOU_TH) # +1 IDF1
-    result_file_path = os.path.join(camera_dir, "all_features_post.txt")
+    result_file_path = os.path.join(camera_dir, f"{cfg.SCT}_{cfg.DETECTION}_all_features_post.txt")
     with open(result_file_path, "w") as f:
         for track in tracks.values():
             obj_id_str = str(track.id)

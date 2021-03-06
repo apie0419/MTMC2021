@@ -92,7 +92,7 @@ def prepare_data():
         for camera_dir in os.listdir(os.path.join(INPUT_DIR, scene_dir)):
             if not camera_dir.startswith("c0"):
                 continue
-            feature_file = os.path.join(INPUT_DIR, scene_dir, camera_dir, "all_features.txt")
+            feature_file = os.path.join(INPUT_DIR, scene_dir, camera_dir, f"{cfg.SCT}_{cfg.DETECTION}_all_features.txt")
             if os.path.exists(feature_file):
                 os.remove(feature_file)
 
@@ -150,7 +150,7 @@ def main(device, data_queue, stop, write_lock, finish_queue):
                 reid_feat_str = str(reid_feat)[1:-1].replace(" ", "")
 
                 write_lock.acquire()
-                with open(os.path.join(path, 'all_features.txt'), 'a+') as f:
+                with open(os.path.join(path, f'{cfg.SCT}_{cfg.DETECTION}_all_features.txt'), 'a+') as f:
                     line = frame_id + "," + id + "," + det_feat + "," + str(ts) + "," + str(GPS_coor[0]) + "," + str(GPS_coor[1]) \
                             + "," + reid_feat_str + "\n"
                     f.write(line)

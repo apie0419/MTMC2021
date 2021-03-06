@@ -10,6 +10,6 @@ def build_model(cfg):
     WEIGHT=cfg.REID.WEIGHTS
     NUM_CLASSES=cfg.REID.NUM_CLASSES
     model = make_model(NUM_CLASSES)
-    checkpoint = torch.load(WEIGHT)
+    checkpoint = torch.load(WEIGHT, map_location='cpu')
     model.load_state_dict(checkpoint['state_dict'])
     return model
