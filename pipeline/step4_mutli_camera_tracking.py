@@ -19,11 +19,10 @@ INPUT_DIR   = cfg.PATH.INPUT_PATH
 NUM_WORKERS = mp.cpu_count()
 DEVICE      = cfg.DEVICE.TYPE
 GPUS        = cfg.DEVICE.GPUS
+device      = torch.device(f"{DEVICE}:{GPUS[0]}")
 
 write_lock  = mp.Lock()
-read_lock   = mp.Lock()
-stop        = mp.Value("i", False)
-count_id    = mp.Value("i", 0)
+count_id    = 0
 
 def read_features_file(file):
     camera_dir = file.split("/")[-2]
@@ -103,120 +102,71 @@ def write_results(results, camera_dirs):
                             str(xworld) + ',' + str(yworld) + "\n"
                     f.write(line)
 
-def match_track_by_cosine(data_queue, result):
+def match_track_by_cosine(query_ft, gallery_fts):
+
+    affinity_list = list()
+    for gallery_ft in gallery_fts:
+        aff = cosine(query_ft, gallery_ft)
+        affinity_list.append(aff)
     
-    while not data_queue.empty() or not stop.value:
-        read_lock.acquire()
-        try:
-            query_track, gallery_tracks = data_queue.get(False)
-        except:
-            read_lock.release()
-            continue
-        read_lock.release()
-        match = False
-        ids = list()
-        affinity_list = list()
-        for gtrack in gallery_tracks:
-            max_aff = 0
-            for q_ft in query_track.feature_list:
-                for g_ft in gtrack.feature_list:
-                    aff = cosine(q_ft, g_ft)
-                    if aff > max_aff:
-                        max_aff = aff
-            affinity_list.append(max_aff)
-            ids.append(gtrack.id)
+    ind = np.argmax(affinity_list)
+    if affinity_list[ind] >= 0.7:
+        match_idx = ind
+    else:
+        match_idx = -1
+
+    return match_idx
         
-        ind = np.argmax(affinity_list)
-        write_lock.acquire()
-        if affinity_list[ind] < 0.7:
-            query_track.id = count_id.value
-            count_id.value += 1
+def match_track(model, query_ft, gallery_fts):
+    
+    tracklets = [query_ft]
+    tracklets.extend(gallery_fts)
+
+    data = torch.stack(tracklets)
+    with torch.no_grad():
+        data = data.to(device)
+        preds = model(data)
+        if preds.max().item() > 0.6:
+            match_idx = preds.argmax().item()
         else:
-            query_track.id = ids[ind]
-        result.append(query_track)
-        write_lock.release()
-        
-def match_track(device, data_queue, result):
-    model = build_model(cfg, device)
-    model.eval()
+            match_idx = -1
     
-    while not data_queue.empty() or not stop.value:
-        read_lock.acquire()
-        try:
-            query_track, gallery_tracks = data_queue.get(False)
-        except:
-            read_lock.release()
-            continue
-        read_lock.release()
-        match = False
-        query = torch.tensor(query_track.feature_list)
-        mean = query.mean(dim=0)
-        std = query.std(dim=0, unbiased=False)
-        query = torch.cat((mean, std))
-        tracklets = [query]
-        ids = list()
-        for track in gallery_tracks:
-            gallery = torch.tensor(track.feature_list)
-            mean = gallery.mean(dim=0)
-            std  = gallery.std(dim=0, unbiased=False)
-            gallery = torch.cat((mean, std))
-            tracklets.append(gallery)
-            ids.append(track.id)
-            
-        data = torch.stack(tracklets)
-        with torch.no_grad():
-            data = data.to(device)
-            preds = model(data)
-            if preds.max().item() > 0.6:
-                match_id = ids[preds.argmax().item()]
-                query_track.id = match_id
-                match = True
-        write_lock.acquire()
-        if not match:
-            query_track.id = count_id.value
-            count_id.value += 1
-        result.append(query_track)
-        write_lock.release()
+    return match_idx
 
 def main(data, camera_dirs):
-    manager  = mp.Manager()
+    global count_id
     results  = dict()
     first_camera = camera_dirs[0].split("/")[-1]
     results[first_camera] = list(data[first_camera].values())
-    count_id.value = len(results[first_camera]) + 1
+    count_id = len(results[first_camera]) + 1
     scene_dict = get_scene_camera_dict(camera_dirs)
+    model = build_model(cfg, device)
+    model.eval()
+
     for camera_dir in camera_dirs[1:]:
         camera = camera_dir.split("/")[-1]
         query_scene = scene_dict[camera]
         query_tracks = data[camera]
         results[camera] = list()
+        match_ids = list()
         
-        result = manager.list()
-        processes = list()
-        data_queue = mp.Queue()
-        stop.value = False
-        for gpu in GPUS:
-            device = torch.device(DEVICE + ':' + str(gpu))
-            p = mp.Process(target=match_track, args=(device, data_queue, result))
-            p.start()
-            processes.append(p)
-        # for _ in range(int(NUM_WORKERS/2)):
-        #     p = mp.Process(target=match_track_by_cosine, args=(data_queue, result))
-        #     p.start()
-        #     processes.append(p)
 
         for obj_id in tqdm(query_tracks, desc=f"Processing Camera Dir {camera}"):
-            gallery_tracks = list()
+            gallery_fts = list()
             query_track = query_tracks[obj_id]
             speed = query_track.speed()
-            if speed == 0:
-                continue
+            query_ft = torch.tensor(query_track.feature_list)
+            mean = query_ft.mean(dim=0)
+            std = query_ft.std(dim=0, unbiased=False)
+            query_ft = torch.cat((mean, std))
+            
             gids = list()
             for c in results:
                 gallery_scene = scene_dict[c]
                 if gallery_scene != query_scene:
                     continue
                 for gallery_track in results[c]:
+                    gid = gallery_track.id
                     
                     g_x = gallery_track.gps_list[int(len(gallery_track)/2)][0] - gallery_track.gps_list[0][0]
                     g_y = gallery_track.gps_list[int(len(gallery_track)/2)][1] - gallery_track.gps_list[0][1]
@@ -230,33 +180,38 @@ def main(data, camera_dirs):
                         continue
                     expected_time = getdistance(query_track.gps_list[0], gallery_track.gps_list[0]) / speed
                     
-                    if (abs(dis_ts - expected_time) > 10) or (direction < 0.7) or (gallery_track.id in gids):
+                    if (abs(dis_ts - expected_time) > 10) or (direction < 0.5) or (gid in match_ids):
                         continue
+                    
+                    gallery_ft = torch.tensor(gallery_track.feature_list)
+                    mean = gallery_ft.mean(dim=0)
+                    std  = gallery_ft.std(dim=0, unbiased=False)
+                    gallery_ft = torch.cat((mean, std))
+                    if gid in gids:
+                        old_gft = gallery_fts[gids.index(gid)]
+                        if cosine(gallery_ft, query_ft) > cosine(old_gft, query_ft):
+                            gallery_fts[gids.index(gid)] = gallery_ft
+                    else:
+                        gids.append(gallery_track.id)
+                        gallery_fts.append(gallery_ft)
 
-                    gids.append(gallery_track.id)
-                    gallery_tracks.append(gallery_track)
+            match = False
+            if len(gallery_fts) != 0:
+                match_idx = match_track(model, query_ft, gallery_fts)
+                # match_idx = match_track_by_cosine(query_ft, gallery_fts)
+                if match_idx != -1:
+                    match_id = gids[match_idx]
+                    match = True
 
-            if len(gallery_tracks) == 0:
-                write_lock.acquire()
-                query_track.id = count_id.value
-                count_id.value += 1
-                result.append(query_track)
-                write_lock.release()
-            else:
-                while data_queue.qsize() >= 3:
-                    pass
-                read_lock.acquire()
-                data_queue.put([query_track, gallery_tracks])
-                read_lock.release()
+                    query_track.id = match_id
+                    match_ids.append(match_id)
+
+            if not match:
+                query_track.id = count_id
+                count_id += 1
+
+            results[camera].append(query_track)
         
-        data_queue.close()
-        data_queue.join_thread()
-        stop.value = True
-        for p in processes:
-            p.join()
-            
-        results[camera] = result
-
     write_results(results, camera_dirs)
     
 if __name__ == "__main__":

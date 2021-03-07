@@ -19,7 +19,6 @@ write_lock  = mp.Lock()
 
 SHORT_TRACK_TH = 2
 IOU_TH = 0.1
-MOVE_DIS_TH = 0.01
 SIZE_TH = 500
 
 def halfway_appear(track, roi):
@@ -259,11 +258,20 @@ def remove_edge_box(tracks, roi):
     return tracks
 
 def remove_abnormal_speed_tracks(tracks):
-    ids = np.array(list(tracks.keys()))
+    delete_ids = list()
     speeds = list()
-    for track_id in ids.tolist():
+    for track_id in tracks:
         track = tracks[track_id]
-        speeds.append(track.speed())
+        speed = track.speed()
+        if speed == 0:
+            delete_ids.append(track_id)
+            continue
+        speeds.append(speed)
+
+    for id in delete_ids:
+        tracks.pop(id)
+
+    ids = np.array(list(tracks.keys()))
     speeds = np.array(speeds)
     mean = speeds.mean()
     std = speeds.std()
@@ -317,7 +325,7 @@ def connect_lost_tracks(tracks, roi):
     
     return tracks
 
-def remove_no_moving_tracks(tracks, iou_threshold, dis_threshold):
+def remove_no_moving_tracks(tracks, iou_threshold):
     delete_ids = list()
     ids = np.array(list(tracks.keys()))
     stay_time = list()
@@ -342,7 +350,7 @@ def remove_no_moving_tracks(tracks, iou_threshold, dis_threshold):
             break
         thres += 0.5
 
-    delete_ids.extend(delete.tolist())
+    # delete_ids.extend(delete.tolist())
         
     for id in set(delete_ids):
         tracks.pop(id)
@@ -359,10 +367,11 @@ def main(_input):
     tracks = connect_lost_tracks(tracks, roi)
     tracks = remove_edge_box(tracks, roi)
     tracks = remove_short_track(tracks, SHORT_TRACK_TH)
+    tracks = remove_overlapped_box(tracks, IOU_TH)
+    tracks = remove_short_track(tracks, SHORT_TRACK_TH)
     tracks = remove_abnormal_speed_tracks(tracks)
-    tracks = remove_no_moving_tracks(tracks, IOU_TH, MOVE_DIS_TH)
+    tracks = remove_no_moving_tracks(tracks, IOU_TH)
     
-    tracks = remove_overlapped_box(tracks, IOU_TH) # +1 IDF1
     result_file_path = os.path.join(camera_dir, f"{cfg.SCT}_{cfg.DETECTION}_all_features_post.txt")
     with open(result_file_path, "w") as f:
         for track in tracks.values():

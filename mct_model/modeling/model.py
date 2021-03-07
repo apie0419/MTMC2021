@@ -78,9 +78,12 @@ class MCT(nn.Module):
         Return an affinity map, size(f[0], f[0])
         """
         self.num_tracklets, self.feature_dim = f.size()
-        f = F.relu(self.fc2(f))
-        f = F.relu(self.fc3(f))
-        f = F.relu(self.fc4(f))
+        # f = F.relu(self.fc2(f))
+        # f = F.relu(self.fc3(f))
+        # f = F.relu(self.fc4(f))
+        f = self.fc2(f)
+        f = self.fc3(f)
+        f = self.fc4(f)
         scores, S = self.projection_ratio(f)
         f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim)
         fij = f * S
