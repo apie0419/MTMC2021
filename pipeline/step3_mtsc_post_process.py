@@ -149,6 +149,23 @@ def prepare_data():
 
     return data, camera_dirs
 
+def adaptation_box(tracks, resolution):
+    SIDE_TH = 25
+    h, w = resolution
+    for track_id in tracks:
+        new_box_list = list()
+        track = tracks[track_id]
+        for box in track.box_list:
+            p0x = int(max(0, box[0] - SIDE_TH))
+            p0y = int(max(0, box[1] - SIDE_TH))
+            p1x = int(min(box[0] + box[2] + SIDE_TH, w-1))
+            p1y = int(min(box[1] + box[3] + SIDE_TH, h-1))
+            new_box = [p0x, p0y, p1x-p0x, p1y-p0y]
+            new_box_list.append(new_box)
+        tracks[track_id].box_list = new_box_list
+
+    return tracks
+
 def remove_short_track(tracks, threshold):
     delete_ids = list()
     for track_id in tracks:
@@ -339,6 +356,7 @@ def remove_no_moving_tracks(tracks, iou_threshold):
         stay_time.append(t2-t1)
         if iou > iou_threshold:
             delete_ids.append(track_id)
+
     stay_time = np.array(stay_time)
     mean = stay_time.mean()
     std = stay_time.std()
@@ -350,7 +368,7 @@ def remove_no_moving_tracks(tracks, iou_threshold):
             break
         thres += 0.5
 
-    # delete_ids.extend(delete.tolist())
+    delete_ids.extend(delete.tolist())
         
     for id in set(delete_ids):
         tracks.pop(id)
@@ -362,7 +380,9 @@ def main(_input):
     roi_path = os.path.join(camera_dir, 'roi.jpg')
     roi_src = cv2.imread(roi_path)
     roi = preprocess_roi(roi_src)
-    
+    h, w, _ = roi.shape
+    resolution = (h, w)
+
     tracks = remove_short_track(tracks, SHORT_TRACK_TH)
     tracks = connect_lost_tracks(tracks, roi)
     tracks = remove_edge_box(tracks, roi)
@@ -371,6 +391,7 @@ def main(_input):
     tracks = remove_short_track(tracks, SHORT_TRACK_TH)
     tracks = remove_abnormal_speed_tracks(tracks)
     tracks = remove_no_moving_tracks(tracks, IOU_TH)
+    tracks = adaptation_box(tracks, resolution)
     
     result_file_path = os.path.join(camera_dir, f"{cfg.SCT}_{cfg.DETECTION}_all_features_post.txt")
     with open(result_file_path, "w") as f:

@@ -136,6 +136,7 @@ def match_track(model, query_ft, gallery_fts):
 def main(data, camera_dirs):
     global count_id
     results  = dict()
+    camera_dirs.sort()
     first_camera = camera_dirs[0].split("/")[-1]
     results[first_camera] = list(data[first_camera].values())
     count_id = len(results[first_camera]) + 1
@@ -150,7 +151,6 @@ def main(data, camera_dirs):
         results[camera] = list()
         match_ids = list()
         
-
         for obj_id in tqdm(query_tracks, desc=f"Processing Camera Dir {camera}"):
             gallery_fts = list()
             query_track = query_tracks[obj_id]
@@ -196,7 +196,7 @@ def main(data, camera_dirs):
                         gallery_fts.append(gallery_ft)
 
             match = False
-            if len(gallery_fts) != 0:
+            if len(gallery_fts) > 0:
                 match_idx = match_track(model, query_ft, gallery_fts)
                 # match_idx = match_track_by_cosine(query_ft, gallery_fts)
                 if match_idx != -1:
