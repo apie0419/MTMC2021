@@ -4,7 +4,7 @@ PATH:
 
 DEVICE:
   TYPE: "cuda"
-  GPUS: [1]
+  GPUS: [0, 1]
 
 REID:
   WEIGHTS: "/home/apie/projects/MTMC2021/reid_model/checkpoints/model-0.305-best_mAP.pth"
@@ -15,7 +15,7 @@ REID:
 
 MCT:
   FEATURE_DIM: 2048
-  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/only_easy.pth"
+  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/fc_aff_easy.pth"
 
 DETECTION: "mask_rcnn"
 SCT: "tc"

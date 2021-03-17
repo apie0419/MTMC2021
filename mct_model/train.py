@@ -7,7 +7,7 @@ from utils.data  import Dataset
 from modeling    import build_model
 from config      import cfg
 from losses      import build_loss
-from torch.optim import Adam
+from torch.optim import Adam, SGD
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -22,11 +22,27 @@ OUTPUT_PATH   = cfg.PATH.OUTPUT_PATH
 device = torch.device(DEVICE + ':' + str(GPU))
 model = build_model(cfg, device)
 tracklets_file = os.path.join(cfg.PATH.TRAIN_PATH, "gt_features.txt")
-easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_easy.txt")
-hard_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_hard.txt")
-dataset = Dataset(tracklets_file, easy_train_file, hard_train_file)
+
+_type = "merge"
+
+if _type == "merge":
+    easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_easy.txt")
+    hard_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_hard.txt")
+    dataset = Dataset(tracklets_file, easy_train_file, hard_train_file)
+    dataset_len = dataset.easy_len() + dataset.hard_len()
+elif _type == "hard":
+    easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_easy.txt")
+    hard_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_hard.txt")
+    dataset = Dataset(tracklets_file, easy_train_file, hard_train_file)
+    dataset_len = dataset.hard_len()
+elif _type == "easy":
+    easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_easy.txt")
+    hard_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_hard.txt")
+    dataset = Dataset(tracklets_file, easy_train_file, hard_train_file)
+    dataset_len = dataset.easy_len()
 
 criterion = build_loss(device)
+
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
 model.train()
 
@@ -48,10 +64,10 @@ for epoch in range(1, epochs + 1):
     triplet_loss_list, cross_loss_list, acc_list = list(), list(), list()
     iterations = 1
 
-    dataset_len = dataset.easy_len()
+    
     pbar = tqdm(total=int(dataset_len / BATCH_SIZE) + 1)
     pbar.set_description(f"Epoch {epoch}, Triplet=0, Cross=0, Acc=0%")
-    dataset_iter = dataset.prepare_data("easy")
+    dataset_iter = dataset.prepare_data(_type)
     
     for data, target in dataset_iter:
         
@@ -91,4 +107,4 @@ for epoch in range(1, epochs + 1):
     pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Avg_Acc={:.2f}%".format(epoch, avg_triplet, avg_cross, avg_acc))
     pbar.close()
     # if epoch % 10 == 0:
-    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}.pth"))
+    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}_{_type}.pth"))

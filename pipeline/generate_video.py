@@ -17,7 +17,7 @@ write_lock  = mp.Lock()
 
 manager = mp.Manager()
 colors = manager.dict()
-select_cameras = ["c024", "c006", "c027", "c035"]
+select_cameras = ["c006", "c007", "c008", "c009"]
 _type = "sct"
 
 def read_result_file(filename):

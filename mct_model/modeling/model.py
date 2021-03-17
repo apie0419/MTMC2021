@@ -16,12 +16,14 @@ class MCT(nn.Module):
         self.lamb = 0.9
         self.device = device
 
+
+        self.dropout = torch.nn.Dropout(p=0.5)
         self.fc1 = nn.Linear(dim, dim)
         
-        ## E
         self.fc2 = nn.Linear(dim, dim)
         self.fc3 = nn.Linear(dim, dim)
         self.fc4 = nn.Linear(dim, dim)
+        self.sim_fc = nn.Linear(dim, 1)
 
         self.fc1.apply(weights_init_kaiming)
         self.fc2.apply(weights_init_kaiming)
@@ -59,6 +61,16 @@ class MCT(nn.Module):
         
         return A
 
+    def similarity_model(self, f_prime, fij):
+        assert f_prime.size() == (self.num_tracklets, self.num_tracklets, self.feature_dim)
+        assert fij.size() == (self.num_tracklets, self.num_tracklets, self.feature_dim)
+        
+        dist = torch.abs(fij - f_prime)
+        A = torch.sigmoid(self.sim_fc(dist))
+        A = A.view(A.size(0), A.size(1))
+        
+        return A
+
     def random_walk(self, A):
         total = torch.sum(A, axis=1) - torch.diagonal(A)
         total = total.clamp(min=1e-10)
@@ -84,13 +96,15 @@ class MCT(nn.Module):
         f = self.fc2(f)
         f = self.fc3(f)
         f = self.fc4(f)
+        f = self.dropout(f)
         scores, S = self.projection_ratio(f)
         f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim)
         fij = f * S
         
-        A = self.similarity(f, fij)
+        # A = self.similarity(f, fij)
+        A = self.similarity_model(f, fij)
         P = self.random_walk(A)
-        # 
+
         # print (A[0][1:])
         # P = A[0][1:]
         # P = P / P.sum()
