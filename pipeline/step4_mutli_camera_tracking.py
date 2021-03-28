@@ -6,7 +6,7 @@ from tqdm          import tqdm
 from utils         import init_path, check_setting
 from utils.mct     import build_model
 from utils.utils   import getdistance, cosine
-from utils.objects import Track
+from utils.objects import Track, GroupNode
 
 init_path()
 
@@ -22,7 +22,6 @@ GPUS        = cfg.DEVICE.GPUS
 device      = torch.device(f"{DEVICE}:{GPUS[0]}")
 
 write_lock  = mp.Lock()
-count_id    = 0
 
 def read_features_file(file):
     camera_dir = file.split("/")[-2]
@@ -102,6 +101,22 @@ def write_results(results, camera_dirs):
                             str(xworld) + ',' + str(yworld) + "\n"
                     f.write(line)
 
+def get_feature_dict(data, camera_dirs):
+    feature_dict = dict()
+    for camera_dir in camera_dirs:
+        camera = camera_dir.split("/")[-1]
+        feature_dict[camera] = dict()
+        tracks = data[camera]
+        for obj_id in tracks:
+            track = tracks[obj_id]
+            feat = torch.tensor(track.feature_list)
+            mean = feat.mean(dim=0)
+            std = feat.std(dim=0, unbiased=False)
+            total_feat = torch.cat((mean, std))
+            feature_dict[camera][obj_id] = total_feat
+
+    return feature_dict
+
 def match_track_by_cosine(query_ft, gallery_fts):
 
     affinity_list = list()
@@ -121,52 +136,125 @@ def match_track(model, query_ft, gallery_fts):
     
     tracklets = [query_ft]
     tracklets.extend(gallery_fts)
-
     data = torch.stack(tracklets)
     with torch.no_grad():
         data = data.to(device)
         preds = model(data)
-        if preds.max().item() > 0.6:
-            match_idx = preds.argmax().item()
-        else:
-            match_idx = -1
+        if preds.size(0) == 1:
+            return [0]
+        
+        sort_preds = torch.sort(preds, descending=True)
+        std = preds.std()
+        mean = preds.mean()
+        match_idx = sort_preds.indices[sort_preds.values > mean + std]
+        match_idx = match_idx.cpu().numpy().tolist()
+        if float(len(match_idx)) / preds.size(0) > 0.15:
+            return []
     
     return match_idx
 
+def group_intersection(A, B):
+    inter_num = 0.
+    if len(B) == 0:
+        return 100
+
+    for camera in A:
+        if camera in B:
+            if B[camera] == A[camera]:
+                inter_num += 1
+
+    return inter_num / len(B)
+
+def grouping_matches(match_dict):
+            
+    for qc in match_dict:
+        for qid in tqdm(match_dict[qc], desc=f"Grouping Matches {qc}"):
+            nodeA = match_dict[qc][qid]
+            count = 1
+            for gc in match_dict:
+                print (count / len(match_dict))
+                count += 1
+                if gc==qc:
+                    continue
+                for gid in match_dict[gc]:
+                    nodeB = match_dict[gc][gid]
+                    A = nodeA.match_ids
+                    B = nodeB.match_ids
+                    # if (gc not in A or gid != A[gc]) and (qc not in B or qid != B[qc]):
+                    #     continue
+                    if gid in A[gc]:
+                        A.pop(gc)
+                    if qid in B[qc]:
+                        B.pop(qc)
+                    if len(B) > len(A):
+                        continue
+                    score = group_intersection(A, B)
+                    if len(A) == len(B):
+                        normal = True
+                        if nodeA.parent != None:
+                            parentnode = nodeA.parent
+                            while parentnode.parent != None:
+                                if parentnode.id == nodeB.id:
+                                    normal = False
+                                    break
+                                parentnode = parentnode.parent
+                        if normal:
+                            if score > nodeB.max_intersection:
+                                nodeB.parent = nodeA
+                                nodeB.max_intersection = score
+                                match_dict[gc][gid] = nodeB
+                        else:
+                            if score > nodeA.max_intersection:
+                                nodeA.parent = nodeB
+                                nodeA.max_intersection = score
+                                match_dict[qc][qid] = nodeA
+                    else:
+                        if score > nodeB.max_intersection:
+                            nodeA.parent = nodeB
+                            nodeA.max_intersection = score
+                            match_dict[gc][gid] = nodeB
+            print (count / total)
+    count = 0
+    total = 0
+    for camera in tqdm(match_dict, desc="Setting ID"):
+        for id in match_dict[camera]:
+            total += 1
+            if match_dict[camera][id].parent != None:
+                count += 1
+                match_dict[camera][id].set_parent_id()
+    print (count / total)
+    return match_dict
+
 def main(data, camera_dirs):
-    global count_id
     results  = dict()
     camera_dirs.sort()
-    first_camera = camera_dirs[0].split("/")[-1]
-    results[first_camera] = list(data[first_camera].values())
-    count_id = len(results[first_camera]) + 1
     scene_dict = get_scene_camera_dict(camera_dirs)
+    feature_dict = get_feature_dict(data, camera_dirs)
+    match_dict = dict()
+    count_id = 1
     model = build_model(cfg, device)
     model.eval()
-
-    for camera_dir in camera_dirs[1:]:
-        camera = camera_dir.split("/")[-1]
-        query_scene = scene_dict[camera]
-        query_tracks = data[camera]
-        results[camera] = list()
-        match_ids = list()
-        
-        for obj_id in tqdm(query_tracks, desc=f"Processing Camera Dir {camera}"):
+    for q_camera_dir in camera_dirs:
+        q_camera = q_camera_dir.split("/")[-1]
+        query_scene = scene_dict[q_camera]
+        query_tracks = data[q_camera]
+        match_dict[q_camera] = dict()
+        for qid in tqdm(query_tracks, desc=f"Processing Camera Dir {q_camera}"):
             gallery_fts = list()
-            query_track = query_tracks[obj_id]
+            query_track = query_tracks[qid]
             speed = query_track.speed()
-            query_ft = torch.tensor(query_track.feature_list)
-            mean = query_ft.mean(dim=0)
-            std = query_ft.std(dim=0, unbiased=False)
-            query_ft = torch.cat((mean, std))
-            
+            query_ft = feature_dict[q_camera][qid]
+            gallery_fts = list()
+            idx_camera_dict = dict()
             gids = list()
-            for c in results:
-                gallery_scene = scene_dict[c]
-                if gallery_scene != query_scene:
+
+            for g_camera_dir in camera_dirs:
+                g_camera = g_camera_dir.split("/")[-1]
+                gallery_scene = scene_dict[g_camera]
+                if gallery_scene != query_scene or g_camera == q_camera:
                     continue
-                for gallery_track in results[c]:
-                    gid = gallery_track.id
+                for gid in data[g_camera]:
+                    gallery_track = data[g_camera][gid]
                     
                     g_x = gallery_track.gps_list[int(len(gallery_track)/2)][0] - gallery_track.gps_list[0][0]
                     g_y = gallery_track.gps_list[int(len(gallery_track)/2)][1] - gallery_track.gps_list[0][1]
@@ -179,39 +267,41 @@ def main(data, camera_dirs):
                     if np.isnan(direction):
                         continue
                     expected_time = getdistance(query_track.gps_list[0], gallery_track.gps_list[0]) / speed
-                    
-                    if (abs(dis_ts - expected_time) > 10) or (direction < 0.5) or (gid in match_ids):
+                    if (abs(dis_ts - expected_time) > 10) or (direction < 0.5):
                         continue
                     
-                    gallery_ft = torch.tensor(gallery_track.feature_list)
-                    mean = gallery_ft.mean(dim=0)
-                    std  = gallery_ft.std(dim=0, unbiased=False)
-                    gallery_ft = torch.cat((mean, std))
-                    if gid in gids:
-                        old_gft = gallery_fts[gids.index(gid)]
-                        if cosine(gallery_ft, query_ft) > cosine(old_gft, query_ft):
-                            gallery_fts[gids.index(gid)] = gallery_ft
-                    else:
-                        gids.append(gallery_track.id)
-                        gallery_fts.append(gallery_ft)
+                    gallery_fts.append(feature_dict[g_camera][gid])
+                    gids.append(gid)
+                    idx_camera_dict[len(gallery_fts)-1] = g_camera
 
-            match = False
             if len(gallery_fts) > 0:
                 match_idx = match_track(model, query_ft, gallery_fts)
                 # match_idx = match_track_by_cosine(query_ft, gallery_fts)
-                if match_idx != -1:
-                    match_id = gids[match_idx]
-                    match = True
-
-                    query_track.id = match_id
-                    match_ids.append(match_id)
-
-            if not match:
-                query_track.id = count_id
+                if len(match_idx) == 0:
+                    continue
+                match_cameras = list()
+                match_ids = dict()
+                for idx in match_idx:
+                    c = idx_camera_dict[idx]
+                    if c in match_cameras:
+                        match_idx.remove(idx)
+                    else:
+                        match_cameras.append(c)
+                        gid = gids[idx]
+                        match_ids[c] = gid
+                match_dict[q_camera][qid] = GroupNode(match_ids, count_id)
                 count_id += 1
 
-            results[camera].append(query_track)
-        
+    group_results = grouping_matches(match_dict)
+    for camera in group_results:
+        if camera not in results:
+            results[camera] = list()
+        for id in group_results[camera]:
+            node = group_results[camera][id]
+            track = data[camera][id]
+            track.id = node.id
+            results[camera].append(track)
+
     write_results(results, camera_dirs)
     
 if __name__ == "__main__":

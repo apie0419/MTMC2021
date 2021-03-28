@@ -2,6 +2,7 @@ import torch, random
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from torch.autograd import Variable
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
@@ -12,11 +13,10 @@ class MCT(nn.Module):
     
     def __init__(self, dim, device):
         super(MCT, self).__init__()
-        self.gkern_sig = 15.0
-        self.lamb = 0.9
+        self.gkern_sig = 20.0
+        self.lamb = 0.5
         self.device = device
-
-
+        
         self.dropout = torch.nn.Dropout(p=0.5)
         self.fc1 = nn.Linear(dim, dim)
         
@@ -32,22 +32,17 @@ class MCT(nn.Module):
 
     def attn(self, _input):
         x = self.fc1(_input)
-        output = x @ _input.T
-
+        output = _input @ _input.T
         return output
 
     def projection_ratio(self, f):
 
         scores = self.attn(f)
         ind = np.diag_indices(scores.size()[0])
-        scores[ind[0], ind[1]] = torch.zeros(scores.size()[0]).to(self.device)
-        
         fj_prime_mag = torch.norm(f, p=2, dim=1) ** 2
-        S = scores / fj_prime_mag
+        S = (scores / fj_prime_mag).T
         S = S.view(self.num_tracklets, self.num_tracklets, 1)
-        
         scores = F.softmax(scores, dim=0)
-
         return scores, S
 
     def similarity(self, f_prime, fij):  
@@ -58,72 +53,82 @@ class MCT(nn.Module):
         ind = np.diag_indices(dist.size()[0])
         dist[ind[0], ind[1]] = torch.zeros(dist.size()[0]).to(self.device)
         A = torch.exp(-0.5 * (dist / (self.gkern_sig ** 2)))
-        
+        # print (A[0][1:])
         return A
 
     def similarity_model(self, f_prime, fij):
         assert f_prime.size() == (self.num_tracklets, self.num_tracklets, self.feature_dim)
         assert fij.size() == (self.num_tracklets, self.num_tracklets, self.feature_dim)
         
-        dist = torch.abs(fij - f_prime)
+        dist = torch.abs(fij - f_prime) ** 2
         A = torch.sigmoid(self.sim_fc(dist))
         A = A.view(A.size(0), A.size(1))
-        
         return A
 
     def random_walk(self, A):
-        total = torch.sum(A, axis=1) - torch.diagonal(A)
-        total = total.clamp(min=1e-10)
-        D = torch.diag(total)
-        T = torch.inverse(D) @ A
-        ind = np.diag_indices(T.size()[0])
-        T[ind[0], ind[1]] = torch.zeros(T.size()[0]).to(self.device)
-        P0 = T[0][1:]
-        T = T[1:, 1:]
-        I = torch.eye(T.size()[0]).to(self.device)
-        P = (1 - self.lamb) * torch.inverse(I - self.lamb * T) @ P0
-        
-        return P
+        p2g = A[0][1:]
+        g2g = Variable(A[1:, 1:].clone(), requires_grad=False)
+
+        g2g = g2g.view(g2g.size(0), g2g.size(0), 1)
+        p2g = p2g.view(1, g2g.size(0), 1)
+        one_diag = Variable(torch.eye(g2g.size(0)).to(self.device), requires_grad=False)
+        inf_diag = torch.diag(torch.Tensor([-float('Inf')]).expand(g2g.size(0))).to(self.device) + g2g[:, :, 0].squeeze().data
+        A = F.softmax(Variable(inf_diag))
+        A = (1 - self.lamb) * torch.inverse(one_diag - self.lamb * A)
+        A = A.transpose(0, 1)
+        p2g = torch.matmul(p2g.permute(2, 0, 1), A).permute(1, 2, 0).contiguous()
+        p2g = p2g.flatten()
+
+
+        # p2g = p2g / p2g.sum()
+        # ind = np.diag_indices(g2g.size()[0])
+        # g2g[ind[0], ind[1]] = torch.zeros(g2g.size()[0]).to(self.device)
+        # total = torch.sum(g2g, axis=1) - torch.diagonal(g2g)
+        # total = total.clamp(min=1e-10)
+        # D = torch.diag(total)
+        # g2g = torch.inverse(D) @ g2g
+        # I = torch.eye(g2g.size()[0]).to(self.device)
+        # P = (1 - self.lamb) * torch.inverse(I - self.lamb * g2g) @ p2g
+        # print (P)
+        # print (P)
+        return p2g
 
     def forward(self, f):
         """
         Return an affinity map, size(f[0], f[0])
         """
         self.num_tracklets, self.feature_dim = f.size()
-        # f = F.relu(self.fc2(f))
-        # f = F.relu(self.fc3(f))
-        # f = F.relu(self.fc4(f))
-        f = self.fc2(f)
-        f = self.fc3(f)
-        f = self.fc4(f)
-        f = self.dropout(f)
-        scores, S = self.projection_ratio(f)
-        f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim)
-        fij = f * S
         
-        # A = self.similarity(f, fij)
-        A = self.similarity_model(f, fij)
-        P = self.random_walk(A)
+        f = F.relu(self.fc2(f))
+        f = F.relu(self.fc3(f))
+        f = F.relu(self.fc4(f))
+        
+        # f = self.fc2(f)
+        # f = self.fc3(f)
+        # f = self.fc4(f)
+        f = self.dropout(f)
 
+        scores, S = self.projection_ratio(f)
+        f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim).permute(1, 0, 2)
+        fij = f * S
+        # print (S[0][1:])
+        A = self.similarity(f, fij)
+        # A = self.similarity_model(f, fij)
         # print (A[0][1:])
-        # P = A[0][1:]
+        P = A[0][1:]
+        # P = self.random_walk(A)
         # P = P / P.sum()
-        # print (P)
-        P = (P - P.mean())
-        P[P < 0] = 0
-        P = P * 100
-        P = F.softmax(P, dim=0)
         if self.training:
-            return P, f[0], fij
+            return P, f[:, 0], fij
         else:
             return P
 
 
 if __name__ == "__main__":
-    num_tracklets = 3
+    num_tracklets = 4
     feature_dim = 2048
     tracklets = list()
-    device = torch.device("cuda:1")
+    device = torch.device("cuda:0")
     for _ in range(num_tracklets):
         num_objects = random.randint(3, 10)
         tracklet = torch.rand((num_objects, feature_dim))

@@ -23,23 +23,12 @@ device = torch.device(DEVICE + ':' + str(GPU))
 model = build_model(cfg, device)
 tracklets_file = os.path.join(cfg.PATH.TRAIN_PATH, "gt_features.txt")
 
-_type = "merge"
-
-if _type == "merge":
-    easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_easy.txt")
-    hard_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_hard.txt")
-    dataset = Dataset(tracklets_file, easy_train_file, hard_train_file)
-    dataset_len = dataset.easy_len() + dataset.hard_len()
-elif _type == "hard":
-    easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_easy.txt")
-    hard_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_hard.txt")
-    dataset = Dataset(tracklets_file, easy_train_file, hard_train_file)
-    dataset_len = dataset.hard_len()
-elif _type == "easy":
-    easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_easy.txt")
-    hard_train_file = os.path.join(cfg.PATH.TRAIN_PATH, "mtmc_hard.txt")
-    dataset = Dataset(tracklets_file, easy_train_file, hard_train_file)
-    dataset_len = dataset.easy_len()
+_type = "easy"
+easy_file = "mtmc_easy_binary.txt"
+hard_file = "mtmc_hard_binary.txt"
+easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, easy_file)
+hard_train_file = os.path.join(cfg.PATH.TRAIN_PATH, hard_file)
+dataset = Dataset(tracklets_file, easy_train_file, hard_train_file, _type)
 
 criterion = build_loss(device)
 
@@ -59,52 +48,63 @@ for epoch in range(1, epochs + 1):
 
     count = 0.
     loss = 0.
+    total = 0.
     triplet_loss = 0.
     cross_loss = 0.
     triplet_loss_list, cross_loss_list, acc_list = list(), list(), list()
     iterations = 1
-
     
-    pbar = tqdm(total=int(dataset_len / BATCH_SIZE) + 1)
+    pbar = tqdm(total=int(len(dataset) / BATCH_SIZE) + 1)
     pbar.set_description(f"Epoch {epoch}, Triplet=0, Cross=0, Acc=0%")
-    dataset_iter = dataset.prepare_data(_type)
     
-    for data, target in dataset_iter:
+    for data, target in dataset.prepare_data():
         
         data, target = data.to(device), target.to(device)
         preds, f_prime, fij = model(data)
         triplet, cross = criterion(f_prime, fij, target, preds)
-        triplet_loss += triplet.item()
-        cross_loss += cross.item()
+        triplet_loss += triplet.cpu().item()
+        cross_loss += cross.cpu().item()
+        
         loss += triplet + cross
         
-        if (iterations % BATCH_SIZE == 0) or (iterations == dataset_len):
+        if (iterations % BATCH_SIZE == 0) or (iterations == len(dataset)):
             loss /= BATCH_SIZE
             triplet_loss /= BATCH_SIZE
             cross_loss /= BATCH_SIZE
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            acc = count / BATCH_SIZE * 100.
+            acc = count / total * 100.
             cross_loss_list.append(cross_loss)
             triplet_loss_list.append(triplet_loss)
             acc_list.append(acc)
-            pbar.set_description("Epoch {}, Triplet={:.4f}, Cross={:.4f}, Acc={:.2f}%".format(epoch, triplet_loss, cross_loss, acc))
+            pbar.set_description("Epoch {}, Triplet={:.4f}, Cross={:.4f}, Map={:.2f}%".format(epoch, triplet_loss, cross_loss, acc))
             pbar.update()
             count = 0.
             loss = 0.
             triplet_loss = 0.
             cross_loss = 0.
-        
-        if preds.argmax().item() == target[0].item():
-            count += 1
-        
+            total = 0.
+
+        sort_preds = torch.argsort(preds, descending=True)
+        target_list = target.cpu().numpy().tolist()
+        # print(preds, target)
+        for i in range(sort_preds.size(0)):
+            if len(target_list) == 0:
+                break
+            t = sort_preds[i]
+            if t in target_list:
+                target_list.remove(t)
+                point = float((target.size(0) - len(target_list))) / float(i + 1)
+                count += point
+                
+        total += target.size(0)
         iterations += 1
         
     avg_acc = np.array(acc_list).mean()
     avg_cross = np.array(cross_loss_list).mean()
     avg_triplet = np.array(triplet_loss_list).mean()
-    pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Avg_Acc={:.2f}%".format(epoch, avg_triplet, avg_cross, avg_acc))
+    pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Avg_Map={:.2f}%".format(epoch, avg_triplet, avg_cross, avg_acc))
     pbar.close()
     # if epoch % 10 == 0:
     torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}_{_type}.pth"))

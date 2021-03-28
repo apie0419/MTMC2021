@@ -15,8 +15,8 @@ VALID_PATH = cfg.PATH.VALID_PATH
 
 device = torch.device(DEVICE + ':' + str(GPU))
 tracklets_file = os.path.join(VALID_PATH, "gt_features.txt")
-easy_file = os.path.join(VALID_PATH, "mtmc_easy.txt")
-hard_file = os.path.join(VALID_PATH, "mtmc_hard.txt")
+easy_file = os.path.join(VALID_PATH, "mtmc_easy_binary.txt")
+hard_file = os.path.join(VALID_PATH, "mtmc_hard_binary.txt")
 dataset = Dataset(tracklets_file, easy_file, hard_file)
 checkpoint = torch.load(WEIGHT, map_location=device)
 model = build_model(cfg, device)

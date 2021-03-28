@@ -33,4 +33,19 @@ class Track(object):
 
     def sort(self):
         self.frame_list, self.ts_list, self.feature_list, self.box_list, self.gps_list = (list(t) for t in zip(*sorted(zip(self.frame_list, self.ts_list, self.feature_list, self.box_list, self.gps_list))))
-    
+
+class GroupNode(object):
+    def __init__(self, match_ids, id):
+        self.id = id
+        self.match_ids = match_ids
+        self.parent = None
+        self.max_intersection = 0
+
+    def __len__(self):
+        return len(self.match_ids)
+
+    def set_parent_id(self):
+        parentnode = self.parent
+        while parentnode.parent != None:
+            parentnode = parentnode.parent
+        self.id = parentnode.id

@@ -5,11 +5,11 @@ PATH:
 
 DEVICE:
   TYPE: "cuda"
-  GPU: 1
+  GPU: 0
 
 MCT: 
   FEATURE_DIM: 2048
   LEARNING_RATE: 0.0001
   EPOCHS: 40
-  BATCH_SIZE: 64
-  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/fc_aff_easy.pth"
+  BATCH_SIZE: 16
+  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/mct_epoch40_easy.pth"

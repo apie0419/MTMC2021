@@ -8,8 +8,8 @@ init_path()
 
 path = cfg.PATH.VALID_PATH
 tracklets_file = os.path.join(path, "gt_features.txt")
-easy_output_file = os.path.join(path, "mtmc_easy.txt")
-hard_output_file = os.path.join(path, "mtmc_hard.txt")
+easy_output_file = os.path.join(path, "mtmc_easy_binary.txt")
+hard_output_file = os.path.join(path, "mtmc_hard_binary.txt")
 min_gallery_num = 5
 max_gallery_num = 15
 
@@ -35,21 +35,40 @@ def write_results(res_dict, filename):
     with open(filename, "w+") as f:
         for q_camera in res_dict:
             for q_id in res_dict[q_camera]:
+                g_cameras = list()
+                labels = list()
+                gallery_ids_list = list()
+                count = 0
                 for data in res_dict[q_camera][q_id]:
-                    label = data["label"]
+                    label = str(data["label"] + count)
                     g_camera = data["camera"]
                     gallery_ids = data["gallery"]
-                    line = q_camera + ' ' + g_camera + ' ' + q_id + ' ' + ",".join(gallery_ids) + ' ' + str(label) + '\n'
+                    labels.append(label)
+                    g_cameras.append(g_camera)
+                    count += len(gallery_ids)
+                    gallery_ids_list.append(",".join(gallery_ids))
+                if len(labels) > 0:
+                    line = q_camera + ' ' + ",".join(g_cameras) + ' ' + q_id + ' ' + "/".join(gallery_ids_list) + ' ' + ','.join(labels) + '\n'
                     f.write(line)
     
 def main():
     data_dict = read_feature_file(tracklets_file)
     hard_res_dict = dict()
     easy_res_dict = dict()
+    
     for camera_id in tqdm(data_dict, desc="Preparing Data"):
         hard_res_dict[camera_id] = dict()
         easy_res_dict[camera_id] = dict()
         for det_id in data_dict[camera_id]:
+            g_cameras = list()
+            for camid in data_dict:
+                if camid == camera_id:
+                    continue
+                if det_id in data_dict[camid]:
+                    g_cameras.append(camid)
+            if len(g_cameras) < 2:
+                continue
+
             hard_res_dict[camera_id][det_id] = list()
             easy_res_dict[camera_id][det_id] = list()
             query_track = data_dict[camera_id][det_id]
@@ -58,14 +77,10 @@ def main():
             std = query_track.std(dim=0, unbiased=False)
             query = torch.cat((mean, std))
 
-            for camid in data_dict:
+            for camid in g_cameras:
                 hard_gallery_tracks = list()
                 easy_gallery_tracks = list()
-                if camid == camera_id:
-                    continue
                 cam_data = data_dict[camid]
-                if det_id not in cam_data:
-                    continue
                 
                 # positive
                 gallery_track = torch.tensor(cam_data[det_id])
