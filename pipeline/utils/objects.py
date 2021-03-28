@@ -39,7 +39,7 @@ class GroupNode(object):
         self.id = id
         self.match_ids = match_ids
         self.parent = None
-        self.max_intersection = 0
+        self.max_intersection = 0.3
 
     def __len__(self):
         return len(self.match_ids)

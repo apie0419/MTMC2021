@@ -15,7 +15,7 @@ REID:
 
 MCT:
   FEATURE_DIM: 2048
-  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/mct_epoch40_easy.pth"
+  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/binary_gk_dropout_easy.pth"
 
 DETECTION: "mask_rcnn"
 SCT: "tc"

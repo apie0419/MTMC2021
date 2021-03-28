@@ -175,22 +175,25 @@ def grouping_matches(match_dict):
                     continue
                 for gid in match_dict[gc]:
                     nodeB = match_dict[gc][gid]
-                    A = nodeA.match_ids
-                    B = nodeB.match_ids
-                    if (gc not in A or gid != A[gc]) and (qc not in B or qid != B[qc]):
+                    A = nodeA.match_ids.copy()
+                    B = nodeB.match_ids.copy()
+                    lenA = len(A)
+                    lenB = len(B)
+                    if lenA < lenB:
                         continue
+                        
                     if gc in A and gid == A[gc]:
                         A.pop(gc)
                     if qc in B and qid == B[qc]:
                         B.pop(qc)
-                    if len(B) > len(A):
-                        continue
+                    
                     score = group_intersection(A, B)
-                    if len(A) == len(B):
+                    if lenA == lenB:
                         normal = True
                         if nodeA.parent != None:
                             parentnode = nodeA.parent
-                            while parentnode.parent != None:
+                            while parentnode != None:
+                                # print (parentnode.id)
                                 if parentnode.id == nodeB.id:
                                     normal = False
                                     break
