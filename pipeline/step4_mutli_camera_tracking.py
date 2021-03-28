@@ -167,24 +167,21 @@ def group_intersection(A, B):
 
 def grouping_matches(match_dict):
             
-    for qc in match_dict:
-        for qid in tqdm(match_dict[qc], desc=f"Grouping Matches {qc}"):
+    for qc in tqdm(match_dict, desc=f"Grouping Matches"):
+        for qid in match_dict[qc]:
             nodeA = match_dict[qc][qid]
-            count = 1
             for gc in match_dict:
-                print (count / len(match_dict))
-                count += 1
                 if gc==qc:
                     continue
                 for gid in match_dict[gc]:
                     nodeB = match_dict[gc][gid]
                     A = nodeA.match_ids
                     B = nodeB.match_ids
-                    # if (gc not in A or gid != A[gc]) and (qc not in B or qid != B[qc]):
-                    #     continue
-                    if gid in A[gc]:
+                    if (gc not in A or gid != A[gc]) and (qc not in B or qid != B[qc]):
+                        continue
+                    if gc in A and gid == A[gc]:
                         A.pop(gc)
-                    if qid in B[qc]:
+                    if qc in B and qid == B[qc]:
                         B.pop(qc)
                     if len(B) > len(A):
                         continue
@@ -210,10 +207,9 @@ def grouping_matches(match_dict):
                                 match_dict[qc][qid] = nodeA
                     else:
                         if score > nodeB.max_intersection:
-                            nodeA.parent = nodeB
-                            nodeA.max_intersection = score
+                            nodeB.parent = nodeA
+                            nodeB.max_intersection = score
                             match_dict[gc][gid] = nodeB
-            print (count / total)
     count = 0
     total = 0
     for camera in tqdm(match_dict, desc="Setting ID"):
