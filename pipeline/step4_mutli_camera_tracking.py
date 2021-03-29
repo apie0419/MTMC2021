@@ -123,12 +123,15 @@ def match_track_by_cosine(query_ft, gallery_fts):
     for gallery_ft in gallery_fts:
         aff = cosine(query_ft, gallery_ft)
         affinity_list.append(aff)
-    
-    ind = np.argmax(affinity_list)
-    if affinity_list[ind] >= 0.7:
-        match_idx = ind
-    else:
-        match_idx = -1
+    affinities = torch.tensor(affinity_list)
+
+    sort_preds = torch.sort(affinities, descending=True)
+    std = affinities.std()
+    mean = affinities.mean()
+    match_idx = sort_preds.indices[sort_preds.values > mean + std]
+    match_idx = match_idx.cpu().numpy().tolist()
+    if float(len(match_idx)) / affinities.size(0) > 0.15:
+        return []
 
     return match_idx
         
@@ -156,7 +159,7 @@ def match_track(model, query_ft, gallery_fts):
 def group_intersection(A, B):
     inter_num = 0.
     if len(B) == 0:
-        return 100
+        return 1
 
     for camera in A:
         if camera in B:
@@ -166,7 +169,6 @@ def group_intersection(A, B):
     return inter_num / len(B)
 
 def grouping_matches(match_dict):
-            
     for qc in tqdm(match_dict, desc=f"Grouping Matches"):
         for qid in match_dict[qc]:
             nodeA = match_dict[qc][qid]
@@ -181,13 +183,17 @@ def grouping_matches(match_dict):
                     lenB = len(B)
                     if lenA < lenB:
                         continue
-                        
-                    if gc in A and gid == A[gc]:
-                        A.pop(gc)
-                    if qc in B and qid == B[qc]:
-                        B.pop(qc)
-                    
-                    score = group_intersection(A, B)
+
+
+                    if (gc in A and gid == A[gc]) and (qc in B and qid == B[qc]):
+                        score = 1
+                    else:
+                        if gc in A:
+                            A.pop(gc)
+                        if qc in B:
+                            B.pop(qc)
+                        score = group_intersection(A, B)
+
                     if lenA == lenB:
                         normal = True
                         if nodeA.parent != None:
@@ -213,15 +219,28 @@ def grouping_matches(match_dict):
                             nodeB.parent = nodeA
                             nodeB.max_intersection = score
                             match_dict[gc][gid] = nodeB
-    count = 0
-    total = 0
+
+    id_counter = dict()
     for camera in tqdm(match_dict, desc="Setting ID"):
         for id in match_dict[camera]:
-            total += 1
             if match_dict[camera][id].parent != None:
-                count += 1
                 match_dict[camera][id].set_parent_id()
-    print (count / total)
+            _id = match_dict[camera][id].id
+            if _id not in id_counter:
+                id_counter[_id] = 1
+            else:
+                id_counter[_id] += 1
+    delete_ids = list()
+    
+    for camera in match_dict:
+        for id in match_dict[camera]:
+            _id = match_dict[camera][id].id
+            if id_counter[_id] == 1:
+                delete_ids.append((camera, id))
+
+    for camera, id in delete_ids:
+        match_dict[camera].pop(id)
+
     return match_dict
 
 def main(data, camera_dirs):
@@ -274,8 +293,8 @@ def main(data, camera_dirs):
                     idx_camera_dict[len(gallery_fts)-1] = g_camera
 
             if len(gallery_fts) > 0:
-                match_idx = match_track(model, query_ft, gallery_fts)
-                # match_idx = match_track_by_cosine(query_ft, gallery_fts)
+                # match_idx = match_track(model, query_ft, gallery_fts)
+                match_idx = match_track_by_cosine(query_ft, gallery_fts)
                 if len(match_idx) == 0:
                     continue
                 match_cameras = list()
