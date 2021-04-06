@@ -150,7 +150,7 @@ def prepare_data():
     return data, camera_dirs
 
 def adaptation_box(tracks, resolution):
-    SIDE_TH = 25
+    SIDE_TH = 10
     h, w = resolution
     for track_id in tracks:
         new_box_list = list()
@@ -385,13 +385,13 @@ def main(_input):
 
     tracks = remove_short_track(tracks, SHORT_TRACK_TH)
     tracks = connect_lost_tracks(tracks, roi)
-    tracks = remove_edge_box(tracks, roi)
-    tracks = remove_short_track(tracks, SHORT_TRACK_TH)
-    tracks = remove_overlapped_box(tracks, IOU_TH)
-    tracks = remove_short_track(tracks, SHORT_TRACK_TH)
+    # tracks = remove_edge_box(tracks, roi)
+    # tracks = remove_short_track(tracks, SHORT_TRACK_TH)
+    # tracks = remove_overlapped_box(tracks, IOU_TH)
+    # tracks = remove_short_track(tracks, SHORT_TRACK_TH)
     tracks = remove_abnormal_speed_tracks(tracks)
     tracks = remove_no_moving_tracks(tracks, IOU_TH)
-    tracks = adaptation_box(tracks, resolution)
+    # tracks = adaptation_box(tracks, resolution)
     
     result_file_path = os.path.join(camera_dir, f"{cfg.SCT}_{cfg.DETECTION}_all_features_post.txt")
     with open(result_file_path, "w") as f:

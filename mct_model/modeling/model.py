@@ -26,13 +26,13 @@ class MCT(nn.Module):
         self.sim_fc = nn.Linear(dim, 1)
 
         self.fc1.apply(weights_init_kaiming)
-        self.fc2.apply(weights_init_kaiming)
+        self.fc2.apply(weights_init_kaiming) 
         self.fc3.apply(weights_init_kaiming)
         self.fc4.apply(weights_init_kaiming)
 
     def attn(self, _input):
         x = self.fc1(_input)
-        output = _input @ _input.T
+        output = x @ _input.T
         return output
 
     def projection_ratio(self, f):
@@ -73,24 +73,12 @@ class MCT(nn.Module):
         p2g = p2g.view(1, g2g.size(0), 1)
         one_diag = Variable(torch.eye(g2g.size(0)).to(self.device), requires_grad=False)
         inf_diag = torch.diag(torch.Tensor([-float('Inf')]).expand(g2g.size(0))).to(self.device) + g2g[:, :, 0].squeeze().data
-        A = F.softmax(Variable(inf_diag))
+        A = F.softmax(Variable(inf_diag), dim=1)
         A = (1 - self.lamb) * torch.inverse(one_diag - self.lamb * A)
         A = A.transpose(0, 1)
         p2g = torch.matmul(p2g.permute(2, 0, 1), A).permute(1, 2, 0).contiguous()
         p2g = p2g.flatten()
 
-
-        # p2g = p2g / p2g.sum()
-        # ind = np.diag_indices(g2g.size()[0])
-        # g2g[ind[0], ind[1]] = torch.zeros(g2g.size()[0]).to(self.device)
-        # total = torch.sum(g2g, axis=1) - torch.diagonal(g2g)
-        # total = total.clamp(min=1e-10)
-        # D = torch.diag(total)
-        # g2g = torch.inverse(D) @ g2g
-        # I = torch.eye(g2g.size()[0]).to(self.device)
-        # P = (1 - self.lamb) * torch.inverse(I - self.lamb * g2g) @ p2g
-        # print (P)
-        # print (P)
         return p2g
 
     def forward(self, f):
@@ -115,8 +103,8 @@ class MCT(nn.Module):
         A = self.similarity(f, fij)
         # A = self.similarity_model(f, fij)
         # print (A[0][1:])
-        P = A[0][1:]
-        # P = self.random_walk(A)
+        # P = A[0][1:]
+        P = self.random_walk(A)
         # P = P / P.sum()
         if self.training:
             return P, f[:, 0], fij

@@ -159,7 +159,7 @@ def match_track(model, query_ft, gallery_fts):
 def group_intersection(A, B):
     inter_num = 0.
     if len(B) == 0:
-        return 1
+        return 0
 
     for camera in A:
         if camera in B:
@@ -183,8 +183,7 @@ def grouping_matches(match_dict):
                     lenB = len(B)
                     if lenA < lenB:
                         continue
-
-
+                    score = 0
                     if (gc in A and gid == A[gc]) and (qc in B and qid == B[qc]):
                         score = 1
                     else:
@@ -285,7 +284,7 @@ def main(data, camera_dirs):
                     if np.isnan(direction):
                         continue
                     expected_time = getdistance(query_track.gps_list[0], gallery_track.gps_list[0]) / speed
-                    if (abs(dis_ts - expected_time) > 10) or (direction < 0.5):
+                    if (abs(dis_ts - expected_time) > 30) or (direction < 0.5):
                         continue
                     
                     gallery_fts.append(feature_dict[g_camera][gid])
