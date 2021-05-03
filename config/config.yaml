@@ -4,7 +4,7 @@ PATH:
 
 DEVICE:
   TYPE: "cuda"
-  GPUS: [0]
+  GPUS: [1]
 
 REID:
   WEIGHTS: "/home/apie/projects/MTMC2021/reid_model/checkpoints/model-0.305-best_mAP.pth"

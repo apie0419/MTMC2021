@@ -23,7 +23,7 @@ device = torch.device(DEVICE + ':' + str(GPU))
 model = build_model(cfg, device)
 tracklets_file = os.path.join(cfg.PATH.TRAIN_PATH, "gt_features.txt")
 
-_type = "merge"
+_type = "easy"
 easy_file = "mtmc_easy_binary.txt"
 hard_file = "mtmc_hard_binary.txt"
 easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, easy_file)

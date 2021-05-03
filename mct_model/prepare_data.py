@@ -35,21 +35,22 @@ def write_results(res_dict, filename):
     with open(filename, "w+") as f:
         for q_camera in res_dict:
             for q_id in res_dict[q_camera]:
-                g_cameras = list()
-                labels = list()
-                gallery_ids_list = list()
-                count = 0
                 for data in res_dict[q_camera][q_id]:
-                    label = str(data["label"] + count)
-                    g_camera = data["camera"]
-                    gallery_ids = data["gallery"]
-                    labels.append(label)
-                    g_cameras.append(g_camera)
-                    count += len(gallery_ids)
-                    gallery_ids_list.append(",".join(gallery_ids))
-                if len(labels) > 0:
-                    line = q_camera + ' ' + ",".join(g_cameras) + ' ' + q_id + ' ' + "/".join(gallery_ids_list) + ' ' + ','.join(labels) + '\n'
-                    f.write(line)
+                    g_cameras = list()
+                    labels = list()
+                    gallery_ids_list = list()
+                    count = 0
+                    for d in data:
+                        label = str(d["label"] + count)
+                        g_camera = d["camera"]
+                        gallery_ids = d["gallery"]
+                        labels.append(label)
+                        g_cameras.append(g_camera)
+                        count += len(gallery_ids)
+                        gallery_ids_list.append(",".join(gallery_ids))
+                    if len(labels) > 0:
+                        line = q_camera + ' ' + ",".join(g_cameras) + ' ' + q_id + ' ' + "/".join(gallery_ids_list) + ' ' + ','.join(labels) + '\n'
+                        f.write(line)
     
 def main():
     data_dict = read_feature_file(tracklets_file)
@@ -78,8 +79,6 @@ def main():
             query = torch.cat((mean, std))
 
             for camid in g_cameras:
-                hard_gallery_tracks = list()
-                easy_gallery_tracks = list()
                 cam_data = data_dict[camid]
                 
                 # positive
@@ -87,8 +86,6 @@ def main():
                 mean = gallery_track.mean(dim=0)
                 std  = gallery_track.std(dim=0, unbiased=False)
                 gallery = torch.cat((mean, std))
-                hard_gallery_tracks.append(det_id)
-                easy_gallery_tracks.append(det_id)
                 num = float(torch.matmul(query, gallery))
                 s = torch.norm(query) * torch.norm(gallery)
                 if s == 0:
@@ -96,29 +93,23 @@ def main():
                 else:
                     pos_cos = num/s
 
-                _min = min_gallery_num
-                _max = max_gallery_num
-                
-                if len(cam_data) - 1 < _max:
-                    _max = len(cam_data) - 1
-                    if len(cam_data) - 1 < _min:
-                        _min = len(cam_data) - 1
+                num_objects = 8
 
-                num_objects = random.randint(_min, _max)
-                ids = list(cam_data.keys())
-                random.shuffle(ids)
-                half_num_objects = int(num_objects/2)
+                if len(cam_data) - 1 < num_objects:
+                    num_objects = len(cam_data) - 1
 
                 # hard sample
-                # hard negetive
+                ids = list(cam_data.keys())
+                ids.remove(det_id)
+                half_num_objects = int(num_objects/2)
+                hard_ids = list()
+                hard_gallery_tracks = list()
+
                 for id in ids:
-                    if (id == det_id) or (num_objects == half_num_objects):
-                        continue
                     gallery_track = torch.tensor(cam_data[id])
                     mean = gallery_track.mean(dim=0)
                     std  = gallery_track.std(dim=0, unbiased=False)
                     gallery = torch.cat((mean, std))
-
                     num = float(torch.matmul(query, gallery))
                     s = torch.norm(query) * torch.norm(gallery)
                     if s == 0:
@@ -126,57 +117,76 @@ def main():
                     else:
                         cos = num/s
                     if cos > pos_cos:
-                        hard_gallery_tracks.append(id)
-                        num_objects -= 1
+                        hard_ids.append(id)
+
+                for hid in hard_ids:
+                    ids.remove(hid)
+                easy_ids = ids
+                
+                if len(hard_ids) > 1:
+                    for i in range(len(hard_ids) / half_num_objects + 1):
+                        data = [det_id]
+                        hids = hard_ids[i*4:(i+1)*4]
+                        data.extend(hids)
+                        left = num_objects - len(hids)
+                        for eid in easy_ids:
+                            if left == 0:
+                                data = [det_id]
+                                data.extend(hids)
+                                hard_gallery_tracks.append(data)
+                                left = num_objects - len(hids)
+                            data.append(eid)
+                            left -= 1
+
+                ## easy sample
+                # easy_gallery_tracks = list()
+                # data = [det_id]
+                # for id in easy_ids:
+                #     if num_objects == 0:
+                #         break
+                    
+                #     data.append(id)
+                #     num_objects -= 1
+                # easy_gallery_tracks.append(data)
 
                 if len(hard_gallery_tracks) > 1:
-                    # easy negetive
-                    for id in ids:
-                        if (num_objects == 0) or (id in hard_gallery_tracks):
-                            continue
-                        
-                        hard_gallery_tracks.append(id)
-                        num_objects -= 1
+                    for i in range(len(hard_gallery_tracks)):
+                        hard_sample = hard_gallery_tracks[i]
+                        orders = list(range(len(hard_sample)))
+                        tmp = list(zip(orders, hard_sample))
+                        random.shuffle(tmp)
+                        orders, hard_sample = zip(*tmp)
+                        label = orders.index(0)
+                        data = {
+                            "gallery": hard_sample,
+                            "label": label,
+                            "camera": camid
+                        }
+                        if i > len(hard_res_dict[camera_id][det_id]) - 1:
+                            hard_res_dict[camera_id][det_id].append([data])
+                        else:
+                            hard_res_dict[camera_id][det_id][i].append(data)
 
-                num_objects = random.randint(_min, _max)
-                
-                ## easy sample
-
-                for id in ids:
-                    if (num_objects == 0) or (id in hard_gallery_tracks):
-                        continue
-                    
-                    easy_gallery_tracks.append(id)
-                    num_objects -= 1
-
-                if len(hard_gallery_tracks) > 2:
-                    orders = list(range(len(hard_gallery_tracks)))
-                    tmp = list(zip(orders, hard_gallery_tracks))
-                    random.shuffle(tmp)
-                    orders, hard_gallery_tracks = zip(*tmp)
-                    label = orders.index(0)
-                    data = {
-                        "gallery": hard_gallery_tracks,
-                        "label": label,
-                        "camera": camid
-                    }
-                    hard_res_dict[camera_id][det_id].append(data)
-
-                if len(easy_gallery_tracks) > 2:
-                    orders = list(range(len(easy_gallery_tracks)))
-                    tmp = list(zip(orders, easy_gallery_tracks))
-                    random.shuffle(tmp)
-                    orders, easy_gallery_tracks = zip(*tmp)
-                    label = orders.index(0)
-                    data = {
-                        "gallery": easy_gallery_tracks,
-                        "label": label,
-                        "camera": camid
-                    }
-                    easy_res_dict[camera_id][det_id].append(data)
+                # if len(easy_gallery_tracks) > 1:
+                #     for i in range(len(easy_gallery_tracks)):
+                #         easy_sample = easy_gallery_tracks[i]
+                #         orders = list(range(len(easy_sample)))
+                #         tmp = list(zip(orders, easy_sample))
+                #         random.shuffle(tmp)
+                #         orders, easy_sample = zip(*tmp)
+                #         label = orders.index(0)
+                #         data = {
+                #             "gallery": easy_sample,
+                #             "label": label,
+                #             "camera": camid
+                #         }
+                #         if i > len(easy_res_dict[camera_id][det_id]) - 1:
+                #             easy_res_dict[camera_id][det_id].append([data])
+                #         else:
+                #             easy_res_dict[camera_id][det_id][i].append(data)
 
     write_results(hard_res_dict, hard_output_file)
-    write_results(easy_res_dict, easy_output_file)
+    # write_results(easy_res_dict, easy_output_file)
 
 if __name__ == "__main__":
     main()

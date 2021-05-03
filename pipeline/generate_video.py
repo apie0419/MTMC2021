@@ -17,7 +17,7 @@ write_lock  = mp.Lock()
 
 manager = mp.Manager()
 colors = manager.dict()
-select_cameras = ["c006", "c007", "c008", "c009"]
+select_cameras = ["c006"]
 _type = "sct"
 
 def read_result_file(filename):
@@ -79,6 +79,9 @@ def write_frame(data_list):
     if results is not None:
         for r in results:
             id, x, y, w, h = r
+            if id not in [235, 250, 412]:
+                continue
+            # print ("hi")
             write_lock.acquire()
             color = colors.get(id)
             if color is None:

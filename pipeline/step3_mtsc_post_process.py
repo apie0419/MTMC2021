@@ -18,7 +18,7 @@ NUM_WORKERS = int(mp.cpu_count()/2)
 write_lock  = mp.Lock()
 
 SHORT_TRACK_TH = 2
-IOU_TH = 0.1
+IOU_TH = 0.05
 SIZE_TH = 500
 
 def halfway_appear(track, roi):
@@ -293,9 +293,9 @@ def remove_abnormal_speed_tracks(tracks):
     mean = speeds.mean()
     std = speeds.std()
     distribution = (speeds - mean) / std
-    thres = 2
+    thres = 1
     while True:
-        delete_ids = ids[abs(distribution) > thres]
+        delete_ids = ids[distribution > thres]
         if float(delete_ids.shape[0]) / ids.shape[0] <= 0.03:
             break
         thres += 0.5
@@ -361,13 +361,12 @@ def remove_no_moving_tracks(tracks, iou_threshold):
     mean = stay_time.mean()
     std = stay_time.std()
     distribution = (stay_time - mean) / std
-    thres = 2
+    thres = 1
     while True:
-        delete = ids[distribution > thres]
+        delete = ids[abs(distribution) > thres]
         if float(delete.shape[0]) / ids.shape[0] <= 0.03:
             break
         thres += 0.5
-
     delete_ids.extend(delete.tolist())
         
     for id in set(delete_ids):
@@ -385,13 +384,13 @@ def main(_input):
 
     tracks = remove_short_track(tracks, SHORT_TRACK_TH)
     tracks = connect_lost_tracks(tracks, roi)
-    # tracks = remove_edge_box(tracks, roi)
-    # tracks = remove_short_track(tracks, SHORT_TRACK_TH)
-    # tracks = remove_overlapped_box(tracks, IOU_TH)
-    # tracks = remove_short_track(tracks, SHORT_TRACK_TH)
+    tracks = remove_edge_box(tracks, roi)
+    tracks = remove_short_track(tracks, SHORT_TRACK_TH)
+    tracks = remove_overlapped_box(tracks, IOU_TH)
+    tracks = remove_short_track(tracks, SHORT_TRACK_TH)
     tracks = remove_abnormal_speed_tracks(tracks)
     tracks = remove_no_moving_tracks(tracks, IOU_TH)
-    # tracks = adaptation_box(tracks, resolution)
+    tracks = adaptation_box(tracks, resolution)
     
     result_file_path = os.path.join(camera_dir, f"{cfg.SCT}_{cfg.DETECTION}_all_features_post.txt")
     with open(result_file_path, "w") as f:

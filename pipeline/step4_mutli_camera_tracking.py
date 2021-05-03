@@ -128,10 +128,10 @@ def match_track_by_cosine(query_ft, gallery_fts):
     sort_preds = torch.sort(affinities, descending=True)
     std = affinities.std()
     mean = affinities.mean()
-    match_idx = sort_preds.indices[sort_preds.values > mean + std]
+    match_idx = sort_preds.indices[sort_preds.values > 0.6]
     match_idx = match_idx.cpu().numpy().tolist()
-    if float(len(match_idx)) / affinities.size(0) > 0.15:
-        return []
+    # if float(len(match_idx)) / affinities.size(0) > 0.15:
+    #     return []
 
     return match_idx
         
@@ -151,8 +151,8 @@ def match_track(model, query_ft, gallery_fts):
         mean = preds.mean()
         match_idx = sort_preds.indices[sort_preds.values > mean + std]
         match_idx = match_idx.cpu().numpy().tolist()
-        if float(len(match_idx)) / preds.size(0) > 0.15:
-            return []
+        # if float(len(match_idx)) / preds.size(0) > 0.15:
+        #     return []
     
     return match_idx
 
@@ -292,8 +292,8 @@ def main(data, camera_dirs):
                     idx_camera_dict[len(gallery_fts)-1] = g_camera
 
             if len(gallery_fts) > 0:
-                # match_idx = match_track(model, query_ft, gallery_fts)
-                match_idx = match_track_by_cosine(query_ft, gallery_fts)
+                match_idx = match_track(model, query_ft, gallery_fts)
+                # match_idx = match_track_by_cosine(query_ft, gallery_fts)
                 if len(match_idx) == 0:
                     continue
                 match_cameras = list()

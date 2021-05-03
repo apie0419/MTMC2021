@@ -17,7 +17,7 @@ class MCT(nn.Module):
         self.lamb = 0.5
         self.device = device
         
-        self.dropout = torch.nn.Dropout(p=0.5)
+        self.dropout = nn.Dropout(p=0.5)
         self.fc1 = nn.Linear(dim, dim)
         
         self.fc2 = nn.Linear(dim, dim)
@@ -88,13 +88,18 @@ class MCT(nn.Module):
         self.num_tracklets, self.feature_dim = f.size()
         
         f = F.relu(self.fc2(f))
+        if self.training:
+            f = self.dropout(f)
         f = F.relu(self.fc3(f))
+        if self.training:
+            f = self.dropout(f)
         f = F.relu(self.fc4(f))
-        
+        if self.training:
+            f = self.dropout(f)
         # f = self.fc2(f)
         # f = self.fc3(f)
         # f = self.fc4(f)
-        f = self.dropout(f)
+        
 
         scores, S = self.projection_ratio(f)
         f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim).permute(1, 0, 2)
@@ -102,10 +107,11 @@ class MCT(nn.Module):
         # print (S[0][1:])
         A = self.similarity(f, fij)
         # A = self.similarity_model(f, fij)
-        # print (A[0][1:])
-        # P = A[0][1:]
-        P = self.random_walk(A)
-        # P = P / P.sum()
+        # P = self.random_walk(A)
+        if self.training:
+            P = self.random_walk(A)
+        else:
+            P = A[0][1:]
         if self.training:
             return P, f[:, 0], fij
         else:
