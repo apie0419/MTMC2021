@@ -6,12 +6,11 @@ from config      import cfg
 
 init_path()
 
-path = cfg.PATH.VALID_PATH
+path = cfg.PATH.TRAIN_PATH
 tracklets_file = os.path.join(path, "gt_features.txt")
 easy_output_file = os.path.join(path, "mtmc_easy_binary.txt")
 hard_output_file = os.path.join(path, "mtmc_hard_binary.txt")
-min_gallery_num = 5
-max_gallery_num = 15
+
 
 def read_feature_file(filename):
     data_dict = dict()
@@ -94,7 +93,6 @@ def main():
                     pos_cos = num/s
 
                 num_objects = 8
-
                 if len(cam_data) - 1 < num_objects:
                     num_objects = len(cam_data) - 1
 
@@ -124,7 +122,7 @@ def main():
                 easy_ids = ids
                 
                 if len(hard_ids) > 1:
-                    for i in range(len(hard_ids) / half_num_objects + 1):
+                    for i in range(int(len(hard_ids) / half_num_objects) + 1):
                         data = [det_id]
                         hids = hard_ids[i*4:(i+1)*4]
                         data.extend(hids)
@@ -138,18 +136,19 @@ def main():
                             data.append(eid)
                             left -= 1
 
-                ## easy sample
-                # easy_gallery_tracks = list()
-                # data = [det_id]
-                # for id in easy_ids:
-                #     if num_objects == 0:
-                #         break
-                    
-                #     data.append(id)
-                #     num_objects -= 1
-                # easy_gallery_tracks.append(data)
+                # easy sample
+                easy_gallery_tracks = list()
+                if len(easy_ids) > 1:
+                    data = [det_id]
+                    for id in easy_ids:
+                        if num_objects == 0:
+                            break
+                        
+                        data.append(id)
+                        num_objects -= 1
+                    easy_gallery_tracks.append(data)
 
-                if len(hard_gallery_tracks) > 1:
+                if len(hard_gallery_tracks) >= 1:
                     for i in range(len(hard_gallery_tracks)):
                         hard_sample = hard_gallery_tracks[i]
                         orders = list(range(len(hard_sample)))
@@ -167,26 +166,26 @@ def main():
                         else:
                             hard_res_dict[camera_id][det_id][i].append(data)
 
-                # if len(easy_gallery_tracks) > 1:
-                #     for i in range(len(easy_gallery_tracks)):
-                #         easy_sample = easy_gallery_tracks[i]
-                #         orders = list(range(len(easy_sample)))
-                #         tmp = list(zip(orders, easy_sample))
-                #         random.shuffle(tmp)
-                #         orders, easy_sample = zip(*tmp)
-                #         label = orders.index(0)
-                #         data = {
-                #             "gallery": easy_sample,
-                #             "label": label,
-                #             "camera": camid
-                #         }
-                #         if i > len(easy_res_dict[camera_id][det_id]) - 1:
-                #             easy_res_dict[camera_id][det_id].append([data])
-                #         else:
-                #             easy_res_dict[camera_id][det_id][i].append(data)
-
+                if len(easy_gallery_tracks) >= 1:
+                    for i in range(len(easy_gallery_tracks)):
+                        easy_sample = easy_gallery_tracks[i]
+                        orders = list(range(len(easy_sample)))
+                        tmp = list(zip(orders, easy_sample))
+                        random.shuffle(tmp)
+                        orders, easy_sample = zip(*tmp)
+                        label = orders.index(0)
+                        data = {
+                            "gallery": easy_sample,
+                            "label": label,
+                            "camera": camid
+                        }
+                        if i > len(easy_res_dict[camera_id][det_id]) - 1:
+                            easy_res_dict[camera_id][det_id].append([data])
+                        else:
+                            easy_res_dict[camera_id][det_id][i].append(data)
+        
     write_results(hard_res_dict, hard_output_file)
-    # write_results(easy_res_dict, easy_output_file)
+    write_results(easy_res_dict, easy_output_file)
 
 if __name__ == "__main__":
     main()
