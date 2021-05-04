@@ -129,9 +129,9 @@ def main():
                         left = num_objects - len(hids)
                         for eid in easy_ids:
                             if left == 0:
+                                hard_gallery_tracks.append(data)
                                 data = [det_id]
                                 data.extend(hids)
-                                hard_gallery_tracks.append(data)
                                 left = num_objects - len(hids)
                             data.append(eid)
                             left -= 1
@@ -140,14 +140,15 @@ def main():
                 easy_gallery_tracks = list()
                 if len(easy_ids) > 1:
                     data = [det_id]
-                    for id in easy_ids:
-                        if num_objects == 0:
-                            break
-                        
-                        data.append(id)
-                        num_objects -= 1
-                    easy_gallery_tracks.append(data)
-
+                    left = num_objects
+                    for eid in easy_ids:
+                        if left == 0:
+                            easy_gallery_tracks.append(data)
+                            data = [det_id]
+                            left = num_objects
+                        data.append(eid)
+                        left -= 1
+                    
                 if len(hard_gallery_tracks) >= 1:
                     for i in range(len(hard_gallery_tracks)):
                         hard_sample = hard_gallery_tracks[i]
