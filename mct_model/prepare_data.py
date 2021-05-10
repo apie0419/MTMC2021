@@ -6,7 +6,7 @@ from config      import cfg
 
 init_path()
 
-path = cfg.PATH.TRAIN_PATH
+path = cfg.PATH.VALID_PATH
 tracklets_file = os.path.join(path, "gt_features.txt")
 easy_output_file = os.path.join(path, "mtmc_easy_binary.txt")
 hard_output_file = os.path.join(path, "mtmc_hard_binary.txt")
