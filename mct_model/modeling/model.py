@@ -24,16 +24,18 @@ class MCT(nn.Module):
         self.fc3 = nn.Linear(dim, dim)
         self.fc4 = nn.Linear(dim, dim)
         self.sim_fc = nn.Linear(dim, 1)
-
+        
         self.fc1.apply(weights_init_kaiming)
         self.fc2.apply(weights_init_kaiming) 
         self.fc3.apply(weights_init_kaiming)
         self.fc4.apply(weights_init_kaiming)
-
+        
+        
     def attn(self, _input):
         # print (_input)
         x = self.fc1(_input)
-        output = _input @ _input.T
+        output = x @ _input.T
+        # output = _input @ _input.T
         return output
 
     def projection_ratio(self, f):
@@ -99,17 +101,11 @@ class MCT(nn.Module):
         
         f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim).permute(1, 0, 2)
         fij = f * S
-        # print (S)
         # fij = f.permute(1, 0, 2) ## 不做投影
-        # print (S[0][1:])
         # A = self.similarity(f, fij)
         A = self.similarity_model(f, fij)
         P = self.random_walk(A)
 
-        # if self.training:
-        #     P = self.random_walk(A)
-        # else:
-        #     P = A[0][1:]
         if self.training:
             return P, f[:, 0], fij
         else:

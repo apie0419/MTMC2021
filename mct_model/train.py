@@ -32,7 +32,6 @@ easy_valid_file = os.path.join(cfg.PATH.VALID_PATH, easy_file)
 hard_valid_file = os.path.join(cfg.PATH.VALID_PATH, hard_file)
 dataset = Dataset(tracklets_file, easy_train_file, hard_train_file, _type)
 valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, _type)
-
 criterion = build_loss(device)
 
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
@@ -98,7 +97,7 @@ for epoch in range(1, epochs + 1):
         # triplet_loss += triplet.cpu().item()
         cross_loss += cross.cpu().item()
         
-        loss += cross
+        loss += cross + triplet
         
         if (iterations % BATCH_SIZE == 0) or (iterations == len(dataset)):
             loss /= BATCH_SIZE
