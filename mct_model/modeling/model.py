@@ -13,7 +13,7 @@ class MCT(nn.Module):
     
     def __init__(self, dim, device):
         super(MCT, self).__init__()
-        self.gkern_sig = 20.0
+        self.gkern_sig = 1.0
         self.lamb = 0.5
         self.device = device
         
@@ -31,12 +31,12 @@ class MCT(nn.Module):
         self.fc4.apply(weights_init_kaiming)
 
     def attn(self, _input):
+        # print (_input)
         x = self.fc1(_input)
-        output = x @ _input.T
+        output = _input @ _input.T
         return output
 
     def projection_ratio(self, f):
-
         scores = self.attn(f)
         ind = np.diag_indices(scores.size()[0])
         fj_prime_mag = torch.norm(f, p=2, dim=1) ** 2
@@ -53,7 +53,6 @@ class MCT(nn.Module):
         ind = np.diag_indices(dist.size()[0])
         dist[ind[0], ind[1]] = torch.zeros(dist.size()[0]).to(self.device)
         A = torch.exp(-0.5 * (dist / (self.gkern_sig ** 2)))
-        # print (A[0][1:])
         return A
 
     def similarity_model(self, f_prime, fij):
@@ -78,8 +77,7 @@ class MCT(nn.Module):
         A = A.transpose(0, 1)
         p2g = torch.matmul(p2g.permute(2, 0, 1), A).permute(1, 2, 0).contiguous()
         p2g = p2g.flatten()
-
-        return p2g
+        return p2g.clamp(0, 1)
 
     def forward(self, f):
         """
@@ -87,31 +85,31 @@ class MCT(nn.Module):
         """
         self.num_tracklets, self.feature_dim = f.size()
         
-        f = F.relu(self.fc2(f))
-        if self.training:
-            f = self.dropout(f)
-        f = F.relu(self.fc3(f))
-        if self.training:
-            f = self.dropout(f)
-        f = F.relu(self.fc4(f))
-        if self.training:
-            f = self.dropout(f)
-        # f = self.fc2(f)
-        # f = self.fc3(f)
-        # f = self.fc4(f)
+        # f = F.relu(self.fc2(f))
+        # if self.training:
+        #     f = self.dropout(f)
+        # f = F.relu(self.fc3(f))
+        # if self.training:
+        #     f = self.dropout(f)
+        # f = F.relu(self.fc4(f))
+        # if self.training:
+        #     f = self.dropout(f)
         
-
         scores, S = self.projection_ratio(f)
+        
         f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim).permute(1, 0, 2)
         fij = f * S
+        # print (S)
+        # fij = f.permute(1, 0, 2) ## 不做投影
         # print (S[0][1:])
-        A = self.similarity(f, fij)
-        # A = self.similarity_model(f, fij)
-        # P = self.random_walk(A)
-        if self.training:
-            P = self.random_walk(A)
-        else:
-            P = A[0][1:]
+        # A = self.similarity(f, fij)
+        A = self.similarity_model(f, fij)
+        P = self.random_walk(A)
+
+        # if self.training:
+        #     P = self.random_walk(A)
+        # else:
+        #     P = A[0][1:]
         if self.training:
             return P, f[:, 0], fij
         else:
@@ -122,6 +120,7 @@ if __name__ == "__main__":
     num_tracklets = 4
     feature_dim = 2048
     tracklets = list()
+    test = torch.rand((num_tracklets,))
     device = torch.device("cuda:0")
     for _ in range(num_tracklets):
         num_objects = random.randint(3, 10)
@@ -132,8 +131,9 @@ if __name__ == "__main__":
         tracklets.append(tracklet_features)
     
     tracklets = torch.stack(tracklets).to(device)
-        
+    # tracklets = torch.Tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [10, 10, 10]]).float().to(device)
+    # model = MCT(3, device). to(device)
     model = MCT(feature_dim * 2, device).to(device)
     model.eval()
     output = model(tracklets)
-    print (output)
+    # print (output)

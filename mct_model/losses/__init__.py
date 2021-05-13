@@ -13,6 +13,7 @@ def build_loss(device):
         bce_target = torch.zeros(P.size(0)).to(device)
         for i in range(target.size(0)):
             bce_target[target[i]] = 1.
+
         bce_loss = bce(P, bce_target.float())
         
         return triplet_loss, bce_loss

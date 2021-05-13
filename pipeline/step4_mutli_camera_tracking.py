@@ -128,6 +128,7 @@ def match_track_by_cosine(query_ft, gallery_fts):
     sort_preds = torch.sort(affinities, descending=True)
     std = affinities.std()
     mean = affinities.mean()
+    # match_idx = sort_preds.indices[sort_preds.values > mean + std]
     match_idx = sort_preds.indices[sort_preds.values > 0.6]
     match_idx = match_idx.cpu().numpy().tolist()
     # if float(len(match_idx)) / affinities.size(0) > 0.15:
@@ -149,10 +150,11 @@ def match_track(model, query_ft, gallery_fts):
         sort_preds = torch.sort(preds, descending=True)
         std = preds.std()
         mean = preds.mean()
+        # match_idx = sort_preds.indices[sort_preds.values > 0.6]
         match_idx = sort_preds.indices[sort_preds.values > mean + std]
         match_idx = match_idx.cpu().numpy().tolist()
-        # if float(len(match_idx)) / preds.size(0) > 0.15:
-        #     return []
+        if float(len(match_idx)) / preds.size(0) > 0.15:
+            return []
     
     return match_idx
 
