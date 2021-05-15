@@ -94,7 +94,7 @@ for epoch in range(1, epochs + 1):
         data, target = data.to(device), target.to(device)
         preds, f_prime, fij = model(data)
         triplet, cross = criterion(f_prime, fij, target, preds)
-        triplet_loss += triplet.cpu().item()
+        # triplet_loss += triplet.cpu().item()
         cross_loss += cross.cpu().item()
         
         loss += cross + triplet

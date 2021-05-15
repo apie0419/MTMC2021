@@ -153,8 +153,8 @@ def match_track(model, query_ft, gallery_fts):
         match_idx = sort_preds.indices[sort_preds.values > 0.6]
         # match_idx = sort_preds.indices[sort_preds.values > mean + std]
         match_idx = match_idx.cpu().numpy().tolist()
-        # if float(len(match_idx)) / preds.size(0) > 0.15:
-        #     return []
+        if float(len(match_idx)) / preds.size(0) > 0.15:
+            return []
     
     return match_idx
 
