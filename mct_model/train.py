@@ -23,15 +23,16 @@ device = torch.device(DEVICE + ':' + str(GPU))
 model = build_model(cfg, device)
 tracklets_file = os.path.join(cfg.PATH.TRAIN_PATH, "gt_features.txt")
 valid_tracklet_file = os.path.join(cfg.PATH.VALID_PATH, "gt_features.txt")
-_type = "merge"
+train_type = "merge"
+valid_type = "merge"
 easy_file = "mtmc_easy_binary.txt"
 hard_file = "mtmc_hard_binary.txt"
 easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, easy_file)
 hard_train_file = os.path.join(cfg.PATH.TRAIN_PATH, hard_file)
 easy_valid_file = os.path.join(cfg.PATH.VALID_PATH, easy_file)
 hard_valid_file = os.path.join(cfg.PATH.VALID_PATH, hard_file)
-dataset = Dataset(tracklets_file, easy_train_file, hard_train_file, _type)
-valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, _type)
+dataset = Dataset(tracklets_file, easy_train_file, hard_train_file, train_type, training=True)
+valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, valid_type, training=False)
 criterion = build_loss(device)
 
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
@@ -56,7 +57,6 @@ def validation(model):
 
             sort_preds = torch.argsort(preds, descending=True)
             target_list = target.numpy().tolist()
-            # print(preds, target)
             for i in range(sort_preds.size(0)):
                 if len(target_list) == 0:
                     break
@@ -141,6 +141,6 @@ for epoch in range(1, epochs + 1):
     valid_map = validation(model)
     pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Avg_Map={:.2f}%, Valid_Map={:.2f}%".format(epoch, avg_triplet, avg_cross, avg_map, valid_map))
     pbar.close()
-    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}_{_type}.pth"))
+    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}_{train_type}.pth"))
 
 

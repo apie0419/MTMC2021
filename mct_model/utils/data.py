@@ -4,19 +4,26 @@ from tqdm import tqdm
 
 class Dataset(object):
 
-    def __init__(self, feature_file, easy_tracklets_file, hard_tracklets_file, _type):
+    def __init__(self, feature_file, easy_tracklets_file, hard_tracklets_file, _type, training=True):
         self.feature_dict = self.read_feature_file(feature_file)
         self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)
         self.hard_data_list = self.read_tracklets_file(hard_tracklets_file)
         self._type = _type
-        random.shuffle(self.easy_data_list)
-        if _type == "easy":
-            self.data_list = self.easy_data_list
-        elif _type == "hard":
-            self.data_list = self.hard_data_list
-        elif _type == "merge":
-            self.data_list = self.easy_data_list[:len(self.hard_data_list) * 9] + self.hard_data_list
-
+        self.training = training
+        if self.training:
+            if _type == "easy":
+                self.data_list = self.easy_data_list[:len(self.hard_data_list) * 10]
+            elif _type == "hard":
+                self.data_list = self.hard_data_list
+            elif _type == "merge":
+                self.data_list = self.easy_data_list[:len(self.hard_data_list)] + self.hard_data_list
+        else:
+            if _type == "easy":
+                self.data_list = self.easy_data_list[:len(self.hard_data_list) * 10]
+            elif _type == "hard":
+                self.data_list = self.hard_data_list
+            elif _type == "merge":
+                self.data_list = self.easy_data_list[:len(self.hard_data_list) * 9] + self.hard_data_list
         random.shuffle(self.data_list)
 
     def __len__(self):
@@ -55,6 +62,11 @@ class Dataset(object):
         return data_list
 
     def prepare_data(self):
+        if self.training:
+            random.shuffle(self.easy_data_list)
+            self.data_list = self.easy_data_list[:len(self.hard_data_list)] + self.hard_data_list
+            random.shuffle(self.data_list)
+
         for data in self.data_list:
             q_cam = data[0]
             g_cams = data[1]
@@ -82,6 +94,8 @@ class Dataset(object):
             tracklets_ft = torch.stack(tracklets)
 
             yield tracklets_ft, label
+
+
 
 if __name__ == '__main__':
     easy_file = "/home/apie/projects/MTMC2021/dataset/train/mtmc_train_easy.txt"

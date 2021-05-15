@@ -13,7 +13,7 @@ class MCT(nn.Module):
     
     def __init__(self, dim, device):
         super(MCT, self).__init__()
-        self.gkern_sig = 1.0
+        self.gkern_sig = 20.0
         self.lamb = 0.5
         self.device = device
         
@@ -34,7 +34,8 @@ class MCT(nn.Module):
     def attn(self, _input):
         # print (_input)
         x = self.fc1(_input)
-        output = _input @ _input.T
+        output = x @ _input.T
+        # output = _input @ _input.T
         return output
 
     def projection_ratio(self, f):
@@ -99,18 +100,15 @@ class MCT(nn.Module):
         scores, S = self.projection_ratio(f)
         
         f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim).permute(1, 0, 2)
+        
         fij = f * S
-        # print (S)
         # fij = f.permute(1, 0, 2) ## 不做投影
-        # print (S[0][1:])
         # A = self.similarity(f, fij)
         A = self.similarity_model(f, fij)
         P = self.random_walk(A)
-
-        # if self.training:
-        #     P = self.random_walk(A)
-        # else:
-        #     P = A[0][1:]
+        # P = (P - P.mean())
+        # P = P * 100
+        # P = torch.sigmoid(P)
         if self.training:
             return P, f[:, 0], fij
         else:

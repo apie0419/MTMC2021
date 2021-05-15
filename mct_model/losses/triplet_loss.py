@@ -14,9 +14,10 @@ class TripletLoss(object):
         n, feat_size = f_prime.size()
         target_list = target.cpu().numpy().tolist()
         anchor, positive, negetive = list(), list(), list()
-    
-        query_same_feats = fij[:, 0][1:] # 投影到 query 上的 feature
+
         query_anchor = f_prime[0]
+        query_same_feats = fij[:, 0][1:] # 投影到 query 上的 feature
+        
         query_positive = list()
         for t in target_list:
             query_positive.append(query_same_feats[t])
@@ -40,8 +41,9 @@ class TripletLoss(object):
             gallery_same_feats = fij[:, t+1, :].view(n, feat_size) # 投影到 target gallery 上的 feature
             gallery_positive = [gallery_same_feats[0]]
             gallery_same_feats = gallery_same_feats[1:]
-            for t in target_list:
-                gallery_positive.append(gallery_same_feats[t])
+            for tt in target_list:
+                if tt != t:
+                    gallery_positive.append(gallery_same_feats[tt])
             
             gallery_negetive = [gallery_same_feats[:target_list[0], :]]
             for i in range(1, len(target_list)):
