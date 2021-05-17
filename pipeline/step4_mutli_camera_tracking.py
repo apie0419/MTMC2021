@@ -20,6 +20,10 @@ NUM_WORKERS = mp.cpu_count()
 DEVICE      = cfg.DEVICE.TYPE
 GPUS        = cfg.DEVICE.GPUS
 device      = torch.device(f"{DEVICE}:{GPUS[0]}")
+METHOD      = "CIR"
+METRICS     = "model"
+SIM_TH      = 0.8
+CIR_TH      = 0.8
 
 write_lock  = mp.Lock()
 
@@ -128,8 +132,9 @@ def match_track_by_cosine(query_ft, gallery_fts):
     sort_preds = torch.sort(affinities, descending=True)
     std = affinities.std()
     mean = affinities.mean()
+
     # match_idx = sort_preds.indices[sort_preds.values > mean + std]
-    match_idx = sort_preds.indices[sort_preds.values > 0.6]
+    match_idx = sort_preds.indices[sort_preds.values > SIM_TH]
     match_idx = match_idx.cpu().numpy().tolist()
     # if float(len(match_idx)) / affinities.size(0) > 0.15:
     #     return []
@@ -150,15 +155,15 @@ def match_track(model, query_ft, gallery_fts):
         sort_preds = torch.sort(preds, descending=True)
         std = preds.std()
         mean = preds.mean()
-        match_idx = sort_preds.indices[sort_preds.values > 0.6]
+        match_idx = sort_preds.indices[sort_preds.values > SIM_TH]
         # match_idx = sort_preds.indices[sort_preds.values > mean + std]
         match_idx = match_idx.cpu().numpy().tolist()
-        if float(len(match_idx)) / preds.size(0) > 0.15:
-            return []
+        # if float(len(match_idx)) / preds.size(0) > 0.15:
+        #     return []
     
     return match_idx
 
-def group_intersection(A, B):
+def CIR(A, B):
     inter_num = 0.
     if len(B) == 0:
         return 0
@@ -170,11 +175,13 @@ def group_intersection(A, B):
 
     return inter_num / len(B)
 
-def grouping_matches(match_dict):
+def grouping_matches(match_dict, scene_dict):
     for qc in tqdm(match_dict, desc=f"Grouping Matches"):
+        qs = scene_dict[qc]
         for qid in match_dict[qc]:
             nodeA = match_dict[qc][qid]
             for gc in match_dict:
+                gs = scene_dict[gc]
                 if gc==qc:
                     continue
                 for gid in match_dict[gc]:
@@ -193,7 +200,7 @@ def grouping_matches(match_dict):
                             A.pop(gc)
                         if qc in B:
                             B.pop(qc)
-                        score = group_intersection(A, B)
+                        score = CIR(A, B)
 
                     if lenA == lenB:
                         normal = True
@@ -258,6 +265,7 @@ def main(data, camera_dirs):
         query_scene = scene_dict[q_camera]
         query_tracks = data[q_camera]
         match_dict[q_camera] = dict()
+        results[q_camera] = list()
         for qid in tqdm(query_tracks, desc=f"Processing Camera Dir {q_camera}"):
             gallery_fts = list()
             query_track = query_tracks[qid]
@@ -266,8 +274,12 @@ def main(data, camera_dirs):
             gallery_fts = list()
             idx_camera_dict = dict()
             gids = list()
-
-            for g_camera_dir in camera_dirs:
+            if METHOD == "CIR":
+                g_camera_dirs = camera_dirs
+            elif METHOD == "top1":
+                g_camera_dirs = list(match_dict.keys())
+            
+            for g_camera_dir in g_camera_dirs:
                 g_camera = g_camera_dir.split("/")[-1]
                 gallery_scene = scene_dict[g_camera]
                 if gallery_scene != query_scene or g_camera == q_camera:
@@ -292,34 +304,58 @@ def main(data, camera_dirs):
                     gallery_fts.append(feature_dict[g_camera][gid])
                     gids.append(gid)
                     idx_camera_dict[len(gallery_fts)-1] = g_camera
+            if METHOD == "CIR":
+                if len(gallery_fts) > 0:
+                    if METRICS == "model":
+                        match_idx = match_track(model, query_ft, gallery_fts)
+                    elif METRICS == "cosine":
+                        match_idx = match_track_by_cosine(query_ft, gallery_fts)
+                    if len(match_idx) == 0:
+                        continue
+                    match_cameras = list()
+                    match_ids = dict()
+                    for idx in match_idx:
+                        c = idx_camera_dict[idx]
+                        if c in match_cameras:
+                            match_idx.remove(idx)
+                        else:
+                            match_cameras.append(c)
+                            gid = gids[idx]
+                            match_ids[c] = gid
+                    match_dict[q_camera][qid] = GroupNode(match_ids, count_id, CIR_TH)
+                    count_id += 1
 
-            if len(gallery_fts) > 0:
-                match_idx = match_track(model, query_ft, gallery_fts)
-                # match_idx = match_track_by_cosine(query_ft, gallery_fts)
-                if len(match_idx) == 0:
-                    continue
-                match_cameras = list()
-                match_ids = dict()
-                for idx in match_idx:
-                    c = idx_camera_dict[idx]
-                    if c in match_cameras:
-                        match_idx.remove(idx)
-                    else:
-                        match_cameras.append(c)
+            elif METHOD == "top1":
+                match = False
+                if len(gallery_fts) > 0:
+                    if METRICS == "model":
+                        match_idx = match_track(model, query_ft, gallery_fts)
+                    elif METRICS == "cosine":
+                        match_idx = match_track_by_cosine(query_ft, gallery_fts)
+                    if len(match_idx) > 0:
+                        idx = match_idx[0]
+                        g_camera = idx_camera_dict[idx]
                         gid = gids[idx]
-                        match_ids[c] = gid
-                match_dict[q_camera][qid] = GroupNode(match_ids, count_id)
-                count_id += 1
+                        match_id = data[g_camera][gid].id
+                        match = True
+                if match:
+                    query_track.id = match_id
+                    data[q_camera][qid] = query_track
+                else:
+                    match_id = count_id
+                    query_track.id = match_id
+                    data[q_camera][qid] = query_track
+                    count_id += 1
+                results[q_camera].append(query_track)
 
-    group_results = grouping_matches(match_dict)
-    for camera in group_results:
-        if camera not in results:
-            results[camera] = list()
-        for id in group_results[camera]:
-            node = group_results[camera][id]
-            track = data[camera][id]
-            track.id = node.id
-            results[camera].append(track)
+    if METHOD == "CIR":
+        group_results = grouping_matches(match_dict, scene_dict)
+        for camera in group_results:
+            for id in group_results[camera]:
+                node = group_results[camera][id]
+                track = data[camera][id]
+                track.id = node.id
+                results[camera].append(track)
 
     write_results(results, camera_dirs)
     

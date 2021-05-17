@@ -23,7 +23,7 @@ device = torch.device(DEVICE + ':' + str(GPU))
 model = build_model(cfg, device)
 tracklets_file = os.path.join(cfg.PATH.TRAIN_PATH, "gt_features.txt")
 valid_tracklet_file = os.path.join(cfg.PATH.VALID_PATH, "gt_features.txt")
-train_type = "merge"
+train_type = "easy"
 valid_type = "merge"
 easy_file = "mtmc_easy_binary.txt"
 hard_file = "mtmc_hard_binary.txt"
@@ -36,7 +36,6 @@ valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, v
 criterion = build_loss(device)
 
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
-model.train()
 
 if not os.path.exists(OUTPUT_PATH):
     os.mkdir(OUTPUT_PATH)
@@ -45,7 +44,7 @@ lr = LEARNING_RATE
 epochs = EPOCHS
 
 def validation(model):
-
+    model.eval()
     ap_list = list()
     with torch.no_grad():
         
@@ -53,8 +52,8 @@ def validation(model):
             count = 0.
             
             data, target = data.to(device), target
-            preds, f_prime, fij = model(data)
-
+            preds = model(data)
+            # print (preds, target)
             sort_preds = torch.argsort(preds, descending=True)
             target_list = target.numpy().tolist()
             for i in range(sort_preds.size(0)):
@@ -71,6 +70,7 @@ def validation(model):
     return _map
 
 for epoch in range(1, epochs + 1):
+    model.train()
     if epoch % 10 == 0:
         lr *= 0.8
         optimizer = Adam(model.parameters(), lr=lr)
@@ -97,7 +97,7 @@ for epoch in range(1, epochs + 1):
         # triplet_loss += triplet.cpu().item()
         cross_loss += cross.cpu().item()
         
-        loss += cross + triplet
+        loss += cross
         
         if (iterations % BATCH_SIZE == 0) or (iterations == len(dataset)):
             loss /= BATCH_SIZE

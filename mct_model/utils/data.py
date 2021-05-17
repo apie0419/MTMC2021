@@ -23,7 +23,7 @@ class Dataset(object):
             elif _type == "hard":
                 self.data_list = self.hard_data_list
             elif _type == "merge":
-                self.data_list = self.easy_data_list[:len(self.hard_data_list) * 9] + self.hard_data_list
+                self.data_list = self.easy_data_list[:20 * 9] + self.hard_data_list[:20]
         random.shuffle(self.data_list)
 
     def __len__(self):
@@ -62,7 +62,7 @@ class Dataset(object):
         return data_list
 
     def prepare_data(self):
-        if self.training:
+        if self.training and self._type == "merge":
             random.shuffle(self.easy_data_list)
             self.data_list = self.easy_data_list[:len(self.hard_data_list)] + self.hard_data_list
             random.shuffle(self.data_list)

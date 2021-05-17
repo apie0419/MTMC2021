@@ -35,11 +35,11 @@ class Track(object):
         self.frame_list, self.ts_list, self.feature_list, self.box_list, self.gps_list = (list(t) for t in zip(*sorted(zip(self.frame_list, self.ts_list, self.feature_list, self.box_list, self.gps_list))))
 
 class GroupNode(object):
-    def __init__(self, match_ids, id):
+    def __init__(self, match_ids, id, thres):
         self.id = id
         self.match_ids = match_ids
         self.parent = None
-        self.max_intersection = 0.3
+        self.max_intersection = thres
 
     def __len__(self):
         return len(self.match_ids)

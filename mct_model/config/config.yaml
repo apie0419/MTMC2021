@@ -10,6 +10,6 @@ DEVICE:
 MCT: 
   FEATURE_DIM: 2048
   LEARNING_RATE: 0.0001
-  EPOCHS: 40
+  EPOCHS: 100
   BATCH_SIZE: 1
-  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/mct_epoch75_merge.pth"
+  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/mct_epoch50_merge.pth"

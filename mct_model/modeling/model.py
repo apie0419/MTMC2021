@@ -105,10 +105,11 @@ class MCT(nn.Module):
         # fij = f.permute(1, 0, 2) ## 不做投影
         # A = self.similarity(f, fij)
         A = self.similarity_model(f, fij)
+        # P = A[0][1:]
         P = self.random_walk(A)
-        # P = (P - P.mean())
-        # P = P * 100
-        # P = torch.sigmoid(P)
+        P = (P - P.mean())
+        P = P * 100
+        P = torch.sigmoid(P)
         if self.training:
             return P, f[:, 0], fij
         else:
