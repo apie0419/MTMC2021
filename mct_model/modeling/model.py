@@ -16,24 +16,26 @@ class MCT(nn.Module):
         self.gkern_sig = 20.0
         self.lamb = 0.5
         self.device = device
-        
+        self.feature_dim = 512
         self.dropout = nn.Dropout(p=0.5)
-        self.fc1 = nn.Linear(dim, dim)
+
         
-        self.fc2 = nn.Linear(dim, dim)
-        self.fc3 = nn.Linear(dim, dim)
-        self.fc4 = nn.Linear(dim, dim)
-        self.sim_fc = nn.Linear(dim, 1)
+        self.fc1 = nn.Linear(dim, self.feature_dim)
+        # self.fc2 = nn.Linear(2048, self.feature_dim)
+        
+        self.att_fc = nn.Linear(self.feature_dim, self.feature_dim)
+        self.sim_fc = nn.Linear(self.feature_dim, 1)
+        self.cam_fc1 = nn.Linear(dim, self.feature_dim)
+        self.cam_fc2 = nn.Linear(self.feature_dim, 36)
         
         self.fc1.apply(weights_init_kaiming)
-        self.fc2.apply(weights_init_kaiming) 
-        self.fc3.apply(weights_init_kaiming)
-        self.fc4.apply(weights_init_kaiming)
-        
-        
+        # self.fc2.apply(weights_init_kaiming)
+        # self.cam_fc1.apply(weights_init_kaiming)
+        # self.cam_fc2.apply(weights_init_kaiming)
+
     def attn(self, _input):
         # print (_input)
-        x = self.fc1(_input)
+        x = self.att_fc(_input)
         output = x @ _input.T
         # output = _input @ _input.T
         return output
@@ -48,8 +50,8 @@ class MCT(nn.Module):
         return scores, S
 
     def similarity(self, f_prime, fij):  
-        assert f_prime.size() == (self.num_tracklets, self.num_tracklets, self.feature_dim)
-        assert fij.size() == (self.num_tracklets, self.num_tracklets, self.feature_dim)
+        assert f_prime.size() == (self.num_tracklets, self.num_tracklets, 512)
+        assert fij.size() == (self.num_tracklets, self.num_tracklets, 512)
         
         dist = torch.norm(torch.abs(fij - f_prime), p=2, dim=2) ** 2
         ind = np.diag_indices(dist.size()[0])
@@ -85,33 +87,31 @@ class MCT(nn.Module):
         """
         Return an affinity map, size(f[0], f[0])
         """
-        self.num_tracklets, self.feature_dim = f.size()
+        self.num_tracklets, _ = f.size()
+
+        copy_f = Variable(f.clone(), requires_grad=True)
+        f = F.relu(self.fc1(f))
+        cam_f = F.relu(self.cam_fc1(copy_f))
+        f -= cam_f
+        cam_f = F.relu(self.cam_fc2(cam_f))
+        cams = F.softmax(cam_f, dim=0)
         
-        # f = F.relu(self.fc2(f))
-        # if self.training:
-        #     f = self.dropout(f)
-        # f = F.relu(self.fc3(f))
-        # if self.training:
-        #     f = self.dropout(f)
-        # f = F.relu(self.fc4(f))
-        # if self.training:
-        #     f = self.dropout(f)
-        
-        scores, S = self.projection_ratio(f)
+        # scores, S = self.projection_ratio(f)
         
         f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim).permute(1, 0, 2)
         
-        fij = f * S
-        # fij = f.permute(1, 0, 2) ## 不做投影
+        # fij = f * S
+        fij = f.permute(1, 0, 2) ## 不做投影
         # A = self.similarity(f, fij)
         A = self.similarity_model(f, fij)
-        # P = A[0][1:]
-        P = self.random_walk(A)
+        P = A[0][1:]
+        # P = self.random_walk(A)
         P = (P - P.mean())
         P = P * 100
         P = torch.sigmoid(P)
         if self.training:
-            return P, f[:, 0], fij
+            # return P, f[:, 0], fij
+            return P, f[:, 0], fij, cams
         else:
             return P
 

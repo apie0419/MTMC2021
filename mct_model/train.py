@@ -48,7 +48,7 @@ def validation(model):
     ap_list = list()
     with torch.no_grad():
         
-        for data, target in valid_dataset.prepare_data():
+        for data, target, cam_target in valid_dataset.prepare_data():
             count = 0.
             
             data, target = data.to(device), target
@@ -71,15 +71,12 @@ def validation(model):
 
 for epoch in range(1, epochs + 1):
     model.train()
-    if epoch % 10 == 0:
-        lr *= 0.8
-        optimizer = Adam(model.parameters(), lr=lr)
-
     total_ap = 0.
     count = 0.
     loss = 0.
     triplet_loss = 0.
     cross_loss = 0.
+    cam_loss = 0.
     triplet_loss_list, cross_loss_list, ap_list = list(), list(), list()
     iterations = 1
     if len(dataset) % BATCH_SIZE == 0:
@@ -89,15 +86,18 @@ for epoch in range(1, epochs + 1):
     pbar = tqdm(total=total)
     pbar.set_description(f"Epoch {epoch}, Triplet=0, Cross=0, Acc=0%")
     
-    for data, target in dataset.prepare_data():
+    for data, target, cams_target in dataset.prepare_data():
         
-        data, target = data.to(device), target.to(device)
-        preds, f_prime, fij = model(data)
-        triplet, cross = criterion(f_prime, fij, target, preds)
-        # triplet_loss += triplet.cpu().item()
+        data, target, cams_target = data.to(device), target.to(device), cams_target.to(device)
+        preds, f_prime, fij, cams = model(data)
+        triplet, cross, cam = criterion(f_prime, fij, target, preds, cams, cams_target)
+        # preds, f_prime, fij = model(data)
+        # triplet, cross = criterion(f_prime, fij, target, preds)
+        triplet_loss += triplet.cpu().item()
         cross_loss += cross.cpu().item()
+        cam_loss += cam.cpu().item()
         
-        loss += cross
+        loss += cross + cam
         
         if (iterations % BATCH_SIZE == 0) or (iterations == len(dataset)):
             loss /= BATCH_SIZE
@@ -117,6 +117,7 @@ for epoch in range(1, epochs + 1):
             loss = 0.
             triplet_loss = 0.
             cross_loss = 0.
+            cam_loss = 0.
             total_ap = 0.
 
         sort_preds = torch.argsort(preds, descending=True)
@@ -135,12 +136,18 @@ for epoch in range(1, epochs + 1):
         iterations += 1
         count = 0.
         
-    avg_map = np.array(ap_list).mean()
+    _map = np.array(ap_list).mean()
     avg_cross = np.array(cross_loss_list).mean()
     avg_triplet = np.array(triplet_loss_list).mean()
-    valid_map = validation(model)
-    pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Avg_Map={:.2f}%, Valid_Map={:.2f}%".format(epoch, avg_triplet, avg_cross, avg_map, valid_map))
+    if epoch % 10 == 0:
+        lr *= 0.8
+        optimizer = Adam(model.parameters(), lr=lr)
+        valid_map = validation(model)
+        torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}_{train_type}.pth"))
+        pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Map={:.2f}%, Valid_Map={:.2f}%".format(epoch, avg_triplet, avg_cross, _map, valid_map))
+    else:
+        pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Map={:.2f}%".format(epoch, avg_triplet, avg_cross, _map))
     pbar.close()
-    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}_{train_type}.pth"))
+    
 
 

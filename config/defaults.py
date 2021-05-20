@@ -26,5 +26,8 @@ _C.REID.BATCH_SIZE = 64
 
 _C.MCT.FEATURE_DIM = 2048
 _C.MCT.WEIGHT = '<path_to_weight>'
-
+_C.MCT.METHOD = "CIR"
+_C.MCT.METRIC = "cosine"
+_C.MCT.SIM_TH = 0.8
+_C.MCT.CIR_TH = 0.8
 _C.merge_from_file(os.path.join(BASE_PATH, "config.yaml"))

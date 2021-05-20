@@ -20,10 +20,10 @@ NUM_WORKERS = mp.cpu_count()
 DEVICE      = cfg.DEVICE.TYPE
 GPUS        = cfg.DEVICE.GPUS
 device      = torch.device(f"{DEVICE}:{GPUS[0]}")
-METHOD      = "CIR"
-METRICS     = "model"
-SIM_TH      = 0.8
-CIR_TH      = 0.8
+METHOD      = cfg.MCT.METHOD
+METRIC      = cfg.MCT.METRIC
+SIM_TH      = cfg.MCT.SIM_TH
+CIR_TH      = cfg.MCT.CIR_TH
 
 write_lock  = mp.Lock()
 
@@ -306,9 +306,9 @@ def main(data, camera_dirs):
                     idx_camera_dict[len(gallery_fts)-1] = g_camera
             if METHOD == "CIR":
                 if len(gallery_fts) > 0:
-                    if METRICS == "model":
+                    if METRIC == "model":
                         match_idx = match_track(model, query_ft, gallery_fts)
-                    elif METRICS == "cosine":
+                    elif METRIC == "cosine":
                         match_idx = match_track_by_cosine(query_ft, gallery_fts)
                     if len(match_idx) == 0:
                         continue
@@ -328,9 +328,9 @@ def main(data, camera_dirs):
             elif METHOD == "top1":
                 match = False
                 if len(gallery_fts) > 0:
-                    if METRICS == "model":
+                    if METRIC == "model":
                         match_idx = match_track(model, query_ft, gallery_fts)
-                    elif METRICS == "cosine":
+                    elif METRIC == "cosine":
                         match_idx = match_track_by_cosine(query_ft, gallery_fts)
                     if len(match_idx) > 0:
                         idx = match_idx[0]

@@ -15,7 +15,11 @@ REID:
 
 MCT:
   FEATURE_DIM: 2048
-  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/mct_epoch100_merge.pth"
+  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/mct_epoch30_merge.pth"
+  METHOD: "CIR"
+  METRIC: "model"
+  SIM_TH: 0.8
+  CIR_TH: 0.8
 
 DETECTION: "mask_rcnn"
 SCT: "tc"

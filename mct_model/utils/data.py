@@ -23,7 +23,7 @@ class Dataset(object):
             elif _type == "hard":
                 self.data_list = self.hard_data_list
             elif _type == "merge":
-                self.data_list = self.easy_data_list[:20 * 9] + self.hard_data_list[:20]
+                self.data_list = self.easy_data_list[:187 * 9] + self.hard_data_list[:187]
         random.shuffle(self.data_list)
 
     def __len__(self):
@@ -73,6 +73,11 @@ class Dataset(object):
             q_id = data[2]
             gallery_ids_list = data[3]
             labels = data[4]
+            cam = int(q_cam[1:])
+            cam -= 1
+            if cam > 4:
+                cam -= 4
+            cam_label = [cam]
             query_track = self.feature_dict[q_cam][q_id]
             query_track = torch.tensor(query_track)
             mean = query_track.mean(dim=0)
@@ -82,19 +87,24 @@ class Dataset(object):
             gallery_tracks = list()
             for i, g_ids in enumerate(gallery_ids_list):
                 g_cam = g_cams[i]
+                cam = int(g_cam[1:])
+                cam -= 1
+                if cam > 5:
+                    cam -= 4
                 for gid in g_ids.split(','):
                     gallery_track = torch.tensor(self.feature_dict[g_cam][gid])
                     mean = gallery_track.mean(dim=0)
                     std  = gallery_track.std(dim=0, unbiased=False)
                     gallery = torch.cat((mean, std))
                     gallery_tracks.append(gallery)
-
+                    cam_label.append(cam)
+            
             label = torch.tensor(labels).long()
+            cam_label = torch.tensor(cam_label).long()
             tracklets.extend(gallery_tracks)
             tracklets_ft = torch.stack(tracklets)
 
-            yield tracklets_ft, label
-
+            yield tracklets_ft, label, cam_label
 
 
 if __name__ == '__main__':
