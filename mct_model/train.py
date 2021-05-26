@@ -42,42 +42,37 @@ if not os.path.exists(OUTPUT_PATH):
 
 lr = LEARNING_RATE
 epochs = EPOCHS
+model.train()
 
 def validation(model):
-    model.eval()
-    ap_list = list()
+    acc_list = list()
+    loss_list = list()
     with torch.no_grad():
-        
-        for data, target, cam_target in valid_dataset.prepare_data():
-            count = 0.
+        for data, target, cams_target in valid_dataset.prepare_data():
             
-            data, target = data.to(device), target
-            preds = model(data)
+            data, target, cams_target = data.to(device), target.to(device), cams_target.to(device)
+            # preds = model(data)
+            preds, f_prime, fij, cams = model(data)
+            triplet, cross = criterion(f_prime, fij, target, preds, cams, cams_target)
             # print (preds, target)
-            sort_preds = torch.argsort(preds, descending=True)
-            target_list = target.numpy().tolist()
-            for i in range(sort_preds.size(0)):
-                if len(target_list) == 0:
-                    break
-                t = sort_preds[i]
-                if t in target_list:
-                    target_list.remove(t)
-                    point = float((target.size(0) - len(target_list))) / float(i + 1)
-                    count += point
-            
-            ap_list.append(count / target.size(0) * 100.)
-    _map = np.array(ap_list).mean()
-    return _map
+            if preds.argmax().item() == target.cpu().numpy():
+                acc_list.append(1.)
+            else:
+                acc_list.append(0.)
+            loss_list.append(cross.cpu().item())
+
+    acc = np.array(acc_list).mean() * 100
+    avg_loss = np.array(loss_list).mean()
+    return acc, avg_loss
 
 for epoch in range(1, epochs + 1):
-    model.train()
-    total_ap = 0.
+    total_acc = 0.
     count = 0.
     loss = 0.
     triplet_loss = 0.
     cross_loss = 0.
     cam_loss = 0.
-    triplet_loss_list, cross_loss_list, ap_list = list(), list(), list()
+    triplet_loss_list, cross_loss_list, acc_list = list(), list(), list()
     iterations = 1
     if len(dataset) % BATCH_SIZE == 0:
         total = int(len(dataset) / BATCH_SIZE)
@@ -90,14 +85,14 @@ for epoch in range(1, epochs + 1):
         
         data, target, cams_target = data.to(device), target.to(device), cams_target.to(device)
         preds, f_prime, fij, cams = model(data)
-        triplet, cross, cam = criterion(f_prime, fij, target, preds, cams, cams_target)
+        triplet, cross = criterion(f_prime, fij, target, preds, cams, cams_target)
         # preds, f_prime, fij = model(data)
         # triplet, cross = criterion(f_prime, fij, target, preds)
         triplet_loss += triplet.cpu().item()
         cross_loss += cross.cpu().item()
-        cam_loss += cam.cpu().item()
-        
-        loss += cross + cam
+        # cam_loss += cam.cpu().item()
+        loss += cross
+        # loss += cross + cam
         
         if (iterations % BATCH_SIZE == 0) or (iterations == len(dataset)):
             loss /= BATCH_SIZE
@@ -108,45 +103,35 @@ for epoch in range(1, epochs + 1):
             optimizer.step()
             cross_loss_list.append(cross_loss)
             triplet_loss_list.append(triplet_loss)
-            _ap = total_ap / BATCH_SIZE
-            ap_list.append(_ap)
+            acc = (total_acc / BATCH_SIZE) * 100
+            acc_list.append(acc)
             
-            pbar.set_description("Epoch {}, Triplet={:.4f}, Cross={:.4f}, Ap={:.2f}%".format(epoch, triplet_loss, cross_loss, _ap))
+            pbar.set_description("Epoch {}, Triplet={:.4f}, Cross={:.4f}, Acc={:.2f}%".format(epoch, triplet_loss, cross_loss, acc))
             pbar.update()
             
             loss = 0.
             triplet_loss = 0.
             cross_loss = 0.
             cam_loss = 0.
-            total_ap = 0.
+            total_acc = 0.
 
-        sort_preds = torch.argsort(preds, descending=True)
-        target_list = target.cpu().numpy().tolist()
-        # print(preds, target)
-        for i in range(sort_preds.size(0)):
-            if len(target_list) == 0:
-                break
-            t = sort_preds[i]
-            if t in target_list:
-                target_list.remove(t)
-                point = float((target.size(0) - len(target_list))) / float(i + 1)
-                count += point
-                
-        total_ap += (count / target.size(0) * 100.)
+        if preds.argmax().item() == target.cpu().numpy():
+            total_acc += 1
+        
         iterations += 1
         count = 0.
         
-    _map = np.array(ap_list).mean()
+    avg_acc = np.array(acc_list).mean()
     avg_cross = np.array(cross_loss_list).mean()
     avg_triplet = np.array(triplet_loss_list).mean()
     if epoch % 10 == 0:
         lr *= 0.8
         optimizer = Adam(model.parameters(), lr=lr)
-        valid_map = validation(model)
+        valid_acc, valid_loss = validation(model)
         torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}_{train_type}.pth"))
-        pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Map={:.2f}%, Valid_Map={:.2f}%".format(epoch, avg_triplet, avg_cross, _map, valid_map))
+        pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Avg_Acc={:.2f}%, Valid_Acc={:.2f}%, Valid_Loss={:.4f}".format(epoch, avg_triplet, avg_cross, avg_acc, valid_acc, valid_loss))
     else:
-        pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Map={:.2f}%".format(epoch, avg_triplet, avg_cross, _map))
+        pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Avg_Acc={:.2f}%".format(epoch, avg_triplet, avg_cross, avg_acc))
     pbar.close()
     
 

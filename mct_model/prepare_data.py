@@ -1,4 +1,4 @@
-import os, torch, random
+import os, torch, random, numpy as np
 
 from tqdm        import tqdm
 from utils       import init_path
@@ -11,24 +11,27 @@ tracklets_file = os.path.join(path, "gt_features.txt")
 easy_output_file = os.path.join(path, "mtmc_easy_binary.txt")
 hard_output_file = os.path.join(path, "mtmc_hard_binary.txt")
 
-
 def read_feature_file(filename):
     data_dict = dict()
+    frame_dict = dict()
     with open(filename, 'r') as f:
         for line in tqdm(f.readlines(), desc="Reading Tracklets File"):
             words = line.strip("\n").split(',')
             camera_id = words[0]
-            frame_id = words[1]
+            frame_id = int(words[1])
             det_id = words[2]
             features = list(map(float, words[3:]))
             if camera_id not in data_dict:
                 data_dict[camera_id] = dict()
+                frame_dict[camera_id] = dict()
             if det_id not in data_dict[camera_id]:
                 data_dict[camera_id][det_id] = list()
+                frame_dict[camera_id][det_id] = list()
 
             data_dict[camera_id][det_id].append(features)
-    
-    return data_dict
+            frame_dict[camera_id][det_id].append(frame_id)
+
+    return data_dict, frame_dict
 
 def write_results(res_dict, filename):
     with open(filename, "w+") as f:
@@ -38,21 +41,16 @@ def write_results(res_dict, filename):
                     g_cameras = list()
                     labels = list()
                     gallery_ids_list = list()
-                    count = 0
                     for d in data:
-                        label = str(d["label"] + count)
+                        label = str(d["label"])
                         g_camera = d["camera"]
                         gallery_ids = d["gallery"]
                         labels.append(label)
-                        g_cameras.append(g_camera)
-                        count += len(gallery_ids)
-                        gallery_ids_list.append(",".join(gallery_ids))
-                    if len(labels) > 0:
-                        line = q_camera + ' ' + ",".join(g_cameras) + ' ' + q_id + ' ' + "/".join(gallery_ids_list) + ' ' + ','.join(labels) + '\n'
+                        line = q_camera + ' ' + g_camera + ' ' + q_id + ' ' + ",".join(gallery_ids) + ' ' + label + '\n'
                         f.write(line)
     
 def main():
-    data_dict = read_feature_file(tracklets_file)
+    data_dict, frame_dict = read_feature_file(tracklets_file)
     hard_res_dict = dict()
     easy_res_dict = dict()
     
@@ -66,7 +64,7 @@ def main():
                     continue
                 if det_id in data_dict[camid]:
                     g_cameras.append(camid)
-            if len(g_cameras) < 2:
+            if len(g_cameras) < 1:
                 continue
 
             hard_res_dict[camera_id][det_id] = list()
@@ -78,9 +76,11 @@ def main():
             query = torch.cat((mean, std))
 
             for camid in g_cameras:
+                frame_data = frame_dict[camid]
                 cam_data = data_dict[camid]
                 
                 # positive
+                pos_frame_list = frame_data[det_id]
                 gallery_track = torch.tensor(cam_data[det_id])
                 mean = gallery_track.mean(dim=0)
                 std  = gallery_track.std(dim=0, unbiased=False)
@@ -104,6 +104,10 @@ def main():
                 hard_gallery_tracks = list()
 
                 for id in ids:
+                    frame_list = frame_data[id]
+                    frame_intersection = np.intersect1d(np.array(pos_frame_list), np.array(frame_list))
+                    if frame_intersection.shape[0] == 0:
+                        continue
                     gallery_track = torch.tensor(cam_data[id])
                     mean = gallery_track.mean(dim=0)
                     std  = gallery_track.std(dim=0, unbiased=False)
@@ -128,6 +132,10 @@ def main():
                         data.extend(hids)
                         left = num_objects - len(hids)
                         for eid in easy_ids:
+                            frame_list = frame_data[eid]
+                            frame_intersection = np.intersect1d(np.array(pos_frame_list), np.array(frame_list))
+                            if frame_intersection.shape[0] == 0:
+                                continue
                             if left == 0:
                                 hard_gallery_tracks.append(data)
                                 data = [det_id]
@@ -142,6 +150,10 @@ def main():
                     data = [det_id]
                     left = num_objects
                     for eid in easy_ids:
+                        frame_list = frame_data[eid]
+                        frame_intersection = np.intersect1d(np.array(pos_frame_list), np.array(frame_list))
+                        if frame_intersection.shape[0] == 0:
+                            continue
                         if left == 0:
                             easy_gallery_tracks.append(data)
                             data = [det_id]

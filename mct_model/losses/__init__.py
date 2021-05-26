@@ -12,13 +12,12 @@ def build_loss(device):
         triplet_loss = triplet(f_prime, fij, target)
         # ce_loss = ce(P.view(-1, 1), target.long())
         bce_target = torch.zeros(P.size(0)).to(device)
-        cam_loss = ce(cams, cam_target)
-        for i in range(target.size(0)):
-            bce_target[target[i]] = 1.
+        bce_target[target] = 1.
+        # cam_loss = ce(cams, cam_target)
 
         bce_loss = bce(P, bce_target.float())
 
-        # return triplet_loss, bce_loss
-        return triplet_loss, bce_loss, cam_loss
+        return triplet_loss, bce_loss
+        # return triplet_loss, bce_loss, cam_loss
 
     return loss_func

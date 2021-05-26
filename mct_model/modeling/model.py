@@ -9,6 +9,12 @@ def weights_init_kaiming(m):
     nn.init.kaiming_normal_(m.weight, a=0, mode='fan_out')
     nn.init.constant_(m.bias, 0.0)
 
+def weights_init_classifier(m):
+    classname = m.__class__.__name__
+    if classname.find('Linear') != -1:
+        nn.init.normal_(m.weight, std=0.001)
+        nn.init.constant_(m.bias, 0.0)
+
 class MCT(nn.Module):
     
     def __init__(self, dim, device):
@@ -24,30 +30,41 @@ class MCT(nn.Module):
         # self.fc2 = nn.Linear(2048, self.feature_dim)
         
         self.att_fc = nn.Linear(self.feature_dim, self.feature_dim)
+        self.att_fc2 = nn.Linear(self.feature_dim, self.feature_dim)
+        self.att_fc3 = nn.Linear(self.feature_dim, self.feature_dim)
         self.sim_fc = nn.Linear(self.feature_dim, 1)
         self.cam_fc1 = nn.Linear(dim, self.feature_dim)
         self.cam_fc2 = nn.Linear(self.feature_dim, 36)
         
         self.fc1.apply(weights_init_kaiming)
-        # self.fc2.apply(weights_init_kaiming)
-        # self.cam_fc1.apply(weights_init_kaiming)
-        # self.cam_fc2.apply(weights_init_kaiming)
+        self.att_fc.apply(weights_init_kaiming)
+        self.att_fc2.apply(weights_init_kaiming)
+        self.att_fc3.apply(weights_init_kaiming)
+        self.sim_fc.apply(weights_init_classifier)
+        self.cam_fc1.apply(weights_init_kaiming)
+        self.cam_fc2.apply(weights_init_classifier)
 
     def attn(self, _input):
         # print (_input)
-        x = self.att_fc(_input)
-        output = x @ _input.T
+        query = self.att_fc(_input)
+        key = self.att_fc2(_input)
+        value = self.att_fc3(_input)
+        # output = x @ _input.T
         # output = _input @ _input.T
-        return output
+        return query, key, value
 
     def projection_ratio(self, f):
-        scores = self.attn(f)
+        # scores = self.attn(f)
+        query, key, value = self.attn(f)
+        scores = query @ key.T
         ind = np.diag_indices(scores.size()[0])
-        fj_prime_mag = torch.norm(f, p=2, dim=1) ** 2
-        S = (scores / fj_prime_mag).T
+        mag = torch.norm(value, p=2, dim=1) ** 2
+        S = (scores / mag).T
+        # fj_prime_mag = torch.norm(f, p=2, dim=1) ** 2
+        # S = (scores / fj_prime_mag).T
         S = S.view(self.num_tracklets, self.num_tracklets, 1)
         scores = F.softmax(scores, dim=0)
-        return scores, S
+        return S, value
 
     def similarity(self, f_prime, fij):  
         assert f_prime.size() == (self.num_tracklets, self.num_tracklets, 512)
@@ -91,25 +108,30 @@ class MCT(nn.Module):
 
         copy_f = Variable(f.clone(), requires_grad=True)
         f = F.relu(self.fc1(f))
+        # if self.training:
+        #     f = self.dropout(f)
         cam_f = F.relu(self.cam_fc1(copy_f))
-        f -= cam_f
+        # f -= cam_f
         cam_f = F.relu(self.cam_fc2(cam_f))
         cams = F.softmax(cam_f, dim=0)
-        
-        # scores, S = self.projection_ratio(f)
-        
-        f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim).permute(1, 0, 2)
-        
+
+        # S, value = self.projection_ratio(f)
+        # value = value.expand(self.num_tracklets, self.num_tracklets, self.feature_dim).permute(1, 0, 2)
+        # A = self.similarity_model(value, fij)
+        # fij = value * S
         # fij = f * S
+        f = f.expand(self.num_tracklets, self.num_tracklets, self.feature_dim).permute(1, 0, 2)
         fij = f.permute(1, 0, 2) ## 不做投影
         # A = self.similarity(f, fij)
         A = self.similarity_model(f, fij)
+        
         P = A[0][1:]
         # P = self.random_walk(A)
-        P = (P - P.mean())
-        P = P * 100
-        P = torch.sigmoid(P)
+        # P = (P - P.mean())
+        # P = P * 100
+        # P = torch.sigmoid(P)
         if self.training:
+            # return P, value[:, 0], fij, cams
             # return P, f[:, 0], fij
             return P, f[:, 0], fij, cams
         else:

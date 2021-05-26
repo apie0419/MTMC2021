@@ -151,7 +151,6 @@ def match_track(model, query_ft, gallery_fts):
         preds = model(data)
         if preds.size(0) == 1:
             return [0]
-        
         sort_preds = torch.sort(preds, descending=True)
         std = preds.std()
         mean = preds.mean()

@@ -31,7 +31,7 @@ pbar = tqdm(total=len(dataset))
 map_list = list()
 with torch.no_grad():
     
-    for data, target in dataset.prepare_data():
+    for data, target, cam_label in dataset.prepare_data():
         count = 0.
         if data == None or target == None:
             dataset_len -= 1
@@ -62,7 +62,6 @@ with torch.no_grad():
         preds = model(data)
         sort_preds = torch.argsort(preds, descending=True)
         target_list = target.numpy().tolist()
-        # print(preds, target)
         for i in range(sort_preds.size(0)):
             if len(target_list) == 0:
                 break

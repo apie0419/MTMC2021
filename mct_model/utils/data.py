@@ -12,18 +12,18 @@ class Dataset(object):
         self.training = training
         if self.training:
             if _type == "easy":
-                self.data_list = self.easy_data_list[:len(self.hard_data_list) * 10]
+                self.data_list = self.easy_data_list
             elif _type == "hard":
                 self.data_list = self.hard_data_list
             elif _type == "merge":
                 self.data_list = self.easy_data_list[:len(self.hard_data_list)] + self.hard_data_list
         else:
             if _type == "easy":
-                self.data_list = self.easy_data_list[:len(self.hard_data_list) * 10]
+                self.data_list = self.easy_data_list
             elif _type == "hard":
                 self.data_list = self.hard_data_list
             elif _type == "merge":
-                self.data_list = self.easy_data_list[:187 * 9] + self.hard_data_list[:187]
+                self.data_list = self.easy_data_list[:len(self.hard_data_list) * 9] + self.hard_data_list
         random.shuffle(self.data_list)
 
     def __len__(self):
@@ -53,11 +53,11 @@ class Dataset(object):
             for line in tqdm(f.readlines(), desc="Reading Tracklets File"):
                 words = line.strip("\n").split(' ')
                 q_cam = words[0]
-                g_cams = words[1].split(',')
+                g_cam = words[1]
                 q_id = words[2]
-                g_ids = words[3].split('/')
-                labels = list(map(int, words[4].split(',')))
-                data_list.append([q_cam, g_cams, q_id, g_ids, labels])
+                g_ids = words[3]
+                label = int(words[4])
+                data_list.append([q_cam, g_cam, q_id, g_ids, label])
         
         return data_list
 
@@ -69,15 +69,20 @@ class Dataset(object):
 
         for data in self.data_list:
             q_cam = data[0]
-            g_cams = data[1]
+            g_cam = data[1]
             q_id = data[2]
-            gallery_ids_list = data[3]
-            labels = data[4]
-            cam = int(q_cam[1:])
-            cam -= 1
-            if cam > 4:
-                cam -= 4
-            cam_label = [cam]
+            g_ids = data[3]
+            label = data[4]
+            qcam = int(q_cam[1:])
+            qcam -= 1
+            if qcam > 4:
+                qcam -= 4
+            cam_label = [qcam]
+            gcam = int(g_cam[1:])
+            gcam -= 1
+            if gcam > 5:
+                gcam -= 4
+            
             query_track = self.feature_dict[q_cam][q_id]
             query_track = torch.tensor(query_track)
             mean = query_track.mean(dim=0)
@@ -85,21 +90,14 @@ class Dataset(object):
             query = torch.cat((mean, std))
             tracklets = [query]
             gallery_tracks = list()
-            for i, g_ids in enumerate(gallery_ids_list):
-                g_cam = g_cams[i]
-                cam = int(g_cam[1:])
-                cam -= 1
-                if cam > 5:
-                    cam -= 4
-                for gid in g_ids.split(','):
-                    gallery_track = torch.tensor(self.feature_dict[g_cam][gid])
-                    mean = gallery_track.mean(dim=0)
-                    std  = gallery_track.std(dim=0, unbiased=False)
-                    gallery = torch.cat((mean, std))
-                    gallery_tracks.append(gallery)
-                    cam_label.append(cam)
-            
-            label = torch.tensor(labels).long()
+            for gid in g_ids.split(","):
+                gallery_track = torch.tensor(self.feature_dict[g_cam][gid])
+                mean = gallery_track.mean(dim=0)
+                std  = gallery_track.std(dim=0, unbiased=False)
+                gallery = torch.cat((mean, std))
+                gallery_tracks.append(gallery)
+                cam_label.append(gcam)
+            label = torch.tensor(label).long()
             cam_label = torch.tensor(cam_label).long()
             tracklets.extend(gallery_tracks)
             tracklets_ft = torch.stack(tracklets)
