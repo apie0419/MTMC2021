@@ -8,8 +8,9 @@ init_path()
 
 path = cfg.PATH.VALID_PATH
 tracklets_file = os.path.join(path, "gt_features.txt")
-easy_output_file = os.path.join(path, "mtmc_easy_binary.txt")
-hard_output_file = os.path.join(path, "mtmc_hard_binary.txt")
+easy_output_file = os.path.join(path, "mtmc_easy_binary_multicam.txt")
+hard_output_file = os.path.join(path, "mtmc_hard_binary_multicam.txt")
+NUM_OBJECTS = 16
 
 def read_feature_file(filename):
     data_dict = dict()
@@ -33,82 +34,54 @@ def read_feature_file(filename):
 
     return data_dict, frame_dict
 
+def get_id_dict(data_dict):
+    id_dict = dict()
+    for camera_id in data_dict:
+        cam_data = data_dict[camera_id]
+        for _id in cam_data:
+            if _id not in id_dict:
+                id_dict[_id] = [camera_id]
+            else:
+                id_dict[_id].append(camera_id)
+    return id_dict
+
 def write_results(res_dict, filename):
     with open(filename, "w+") as f:
         for q_camera in res_dict:
             for q_id in res_dict[q_camera]:
-                for data in res_dict[q_camera][q_id]:
-                    g_cameras = list()
-                    labels = list()
-                    gallery_ids_list = list()
-                    for d in data:
-                        label = str(d["label"])
-                        g_camera = d["camera"]
-                        gallery_ids = d["gallery"]
-                        labels.append(label)
-                        line = q_camera + ' ' + g_camera + ' ' + q_id + ' ' + ",".join(gallery_ids) + ' ' + label + '\n'
-                        f.write(line)
-    
+                for gallery_tracks in res_dict[q_camera][q_id]:
+                    gallery_str = list()
+                    for gt in gallery_tracks:
+                        gallery_str.append("/".join(gt))
+                    gallery_str = ",".join(gallery_str)
+                    line = q_camera + ' ' + q_id + ' ' + gallery_str + '\n'
+                    f.write(line)
+
 def main():
     data_dict, frame_dict = read_feature_file(tracklets_file)
+    id_dict = get_id_dict(data_dict)
     hard_res_dict = dict()
     easy_res_dict = dict()
-    
-    for camera_id in tqdm(data_dict, desc="Preparing Data"):
-        hard_res_dict[camera_id] = dict()
-        easy_res_dict[camera_id] = dict()
-        for det_id in data_dict[camera_id]:
-            g_cameras = list()
-            for camid in data_dict:
-                if camid == camera_id:
-                    continue
-                if det_id in data_dict[camid]:
-                    g_cameras.append(camid)
-            if len(g_cameras) < 1:
-                continue
-
-            hard_res_dict[camera_id][det_id] = list()
-            easy_res_dict[camera_id][det_id] = list()
-            query_track = data_dict[camera_id][det_id]
+    all_cameras = list(data_dict.keys())
+    for qid in tqdm(id_dict, desc="Preparing Data"):
+        q_exist_cams = id_dict[qid]
+        
+        if len(q_exist_cams) < 3:
+            continue
+        for qcam in q_exist_cams:
+            query_track = data_dict[qcam][qid]
             query_track = torch.tensor(query_track)
             mean = query_track.mean(dim=0)
             std = query_track.std(dim=0, unbiased=False)
+            pos_sim = list()
             query = torch.cat((mean, std))
-
-            for camid in g_cameras:
-                frame_data = frame_dict[camid]
-                cam_data = data_dict[camid]
-                
-                # positive
-                pos_frame_list = frame_data[det_id]
-                gallery_track = torch.tensor(cam_data[det_id])
-                mean = gallery_track.mean(dim=0)
-                std  = gallery_track.std(dim=0, unbiased=False)
-                gallery = torch.cat((mean, std))
-                num = float(torch.matmul(query, gallery))
-                s = torch.norm(query) * torch.norm(gallery)
-                if s == 0:
-                    pos_cos = 0.0
-                else:
-                    pos_cos = num/s
-
-                num_objects = 8
-                if len(cam_data) - 1 < num_objects:
-                    num_objects = len(cam_data) - 1
-
-                # hard sample
-                ids = list(cam_data.keys())
-                ids.remove(det_id)
-                half_num_objects = int(num_objects/2)
-                hard_ids = list()
-                hard_gallery_tracks = list()
-
-                for id in ids:
-                    frame_list = frame_data[id]
-                    frame_intersection = np.intersect1d(np.array(pos_frame_list), np.array(frame_list))
-                    if frame_intersection.shape[0] == 0:
-                        continue
-                    gallery_track = torch.tensor(cam_data[id])
+            hard_samples = list()
+            easy_samples = list()
+            
+            ## Positive
+            for p_gcam in q_exist_cams:
+                if qcam != p_gcam:
+                    gallery_track = torch.tensor(data_dict[p_gcam][qid])
                     mean = gallery_track.mean(dim=0)
                     std  = gallery_track.std(dim=0, unbiased=False)
                     gallery = torch.cat((mean, std))
@@ -118,85 +91,60 @@ def main():
                         cos = 0.0
                     else:
                         cos = num/s
-                    if cos > pos_cos:
-                        hard_ids.append(id)
+                    pos_sim.append(cos)
 
-                for hid in hard_ids:
-                    ids.remove(hid)
-                easy_ids = ids
-                
-                if len(hard_ids) > 1:
-                    for i in range(int(len(hard_ids) / half_num_objects) + 1):
-                        data = [det_id]
-                        hids = hard_ids[i*4:(i+1)*4]
-                        data.extend(hids)
-                        left = num_objects - len(hids)
-                        for eid in easy_ids:
-                            frame_list = frame_data[eid]
-                            frame_intersection = np.intersect1d(np.array(pos_frame_list), np.array(frame_list))
-                            if frame_intersection.shape[0] == 0:
-                                continue
-                            if left == 0:
-                                hard_gallery_tracks.append(data)
-                                data = [det_id]
-                                data.extend(hids)
-                                left = num_objects - len(hids)
-                            data.append(eid)
-                            left -= 1
+            ## Negative
+            for gid in id_dict:
+                if qid == gid:
+                    continue
+                g_exist_cams = id_dict[gid]
+                for gcam in g_exist_cams:
+                    if gcam == qcam:
+                        continue
+                    gallery_track = torch.tensor(data_dict[gcam][gid])
+                    mean = gallery_track.mean(dim=0)
+                    std  = gallery_track.std(dim=0, unbiased=False)
+                    gallery = torch.cat((mean, std))
+                    num = float(torch.matmul(query, gallery))
+                    s = torch.norm(query) * torch.norm(gallery)
+                    if s == 0:
+                        cos = 0.0
+                    else:
+                        cos = num/s
 
-                # easy sample
-                easy_gallery_tracks = list()
-                if len(easy_ids) > 1:
-                    data = [det_id]
-                    left = num_objects
-                    for eid in easy_ids:
-                        frame_list = frame_data[eid]
-                        frame_intersection = np.intersect1d(np.array(pos_frame_list), np.array(frame_list))
-                        if frame_intersection.shape[0] == 0:
-                            continue
-                        if left == 0:
-                            easy_gallery_tracks.append(data)
-                            data = [det_id]
-                            left = num_objects
-                        data.append(eid)
-                        left -= 1
+                    hard = False
+                    for pos_cos in pos_sim:
+                        if pos_cos <= cos:
+                            hard = True
+                            break
                     
-                if len(hard_gallery_tracks) >= 1:
-                    for i in range(len(hard_gallery_tracks)):
-                        hard_sample = hard_gallery_tracks[i]
-                        orders = list(range(len(hard_sample)))
-                        tmp = list(zip(orders, hard_sample))
-                        random.shuffle(tmp)
-                        orders, hard_sample = zip(*tmp)
-                        label = orders.index(0)
-                        data = {
-                            "gallery": hard_sample,
-                            "label": label,
-                            "camera": camid
-                        }
-                        if i > len(hard_res_dict[camera_id][det_id]) - 1:
-                            hard_res_dict[camera_id][det_id].append([data])
-                        else:
-                            hard_res_dict[camera_id][det_id][i].append(data)
+                    if hard:
+                        hard_samples.append((gcam, gid))
+                    else:
+                        easy_samples.append((gcam, gid))
+                    
+                    if len(hard_samples) == len(q_exist_cams):
+                        if qcam not in hard_res_dict:
+                            hard_res_dict[qcam] = dict()
+                        if qid not in hard_res_dict[qcam]:
+                            hard_res_dict[qcam][qid] = list()
+                        for g_pcam in q_exist_cams:
+                            hard_samples.insert(0, (g_pcam, qid))
+                        random.shuffle(hard_samples)
+                        hard_res_dict[qcam][qid].append(hard_samples)
+                        hard_samples = list()
 
-                if len(easy_gallery_tracks) >= 1:
-                    for i in range(len(easy_gallery_tracks)):
-                        easy_sample = easy_gallery_tracks[i]
-                        orders = list(range(len(easy_sample)))
-                        tmp = list(zip(orders, easy_sample))
-                        random.shuffle(tmp)
-                        orders, easy_sample = zip(*tmp)
-                        label = orders.index(0)
-                        data = {
-                            "gallery": easy_sample,
-                            "label": label,
-                            "camera": camid
-                        }
-                        if i > len(easy_res_dict[camera_id][det_id]) - 1:
-                            easy_res_dict[camera_id][det_id].append([data])
-                        else:
-                            easy_res_dict[camera_id][det_id][i].append(data)
-        
+                    if len(easy_samples) == len(q_exist_cams):
+                        if qcam not in easy_res_dict:
+                            easy_res_dict[qcam] = dict()
+                        if qid not in easy_res_dict[qcam]:
+                            easy_res_dict[qcam][qid] = list()
+                        for g_pcam in q_exist_cams:
+                            easy_samples.insert(0, (g_pcam, qid))
+                        random.shuffle(easy_samples)
+                        easy_res_dict[qcam][qid].append(easy_samples)
+                        easy_samples = list()
+
     write_results(hard_res_dict, hard_output_file)
     write_results(easy_res_dict, easy_output_file)
 

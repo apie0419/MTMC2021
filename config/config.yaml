@@ -1,13 +1,13 @@
 PATH:
-  ROOT_PATH: "/home/apie/projects/MTMC2021/dataset"
-  INPUT_PATH: "/home/apie/projects/MTMC2021/dataset/validation"
+  ROOT_PATH: "/home/apie/projects/MTMC2021_ver2/dataset"
+  INPUT_PATH: "/home/apie/projects/MTMC2021_ver2/dataset/validation"
 
 DEVICE:
   TYPE: "cuda"
   GPUS: [1]
 
 REID:
-  WEIGHTS: "/home/apie/projects/MTMC2021/reid_model/checkpoints/model-0.305-best_mAP.pth"
+  WEIGHTS: "/home/apie/projects/MTMC2021_ver2/reid_model/checkpoints/model-0.305-best_mAP.pth"
   NUM_CLASSES: 667
   IMG_SIZE: [224, 224]
   EMB_SIZE: 2048
@@ -15,7 +15,7 @@ REID:
 
 MCT:
   FEATURE_DIM: 2048
-  WEIGHT: "/home/apie/projects/MTMC2021/mct_model/checkpoints/mct_epoch50_merge.pth"
+  WEIGHT: "/home/apie/projects/MTMC2021_ver2/mct_model/checkpoints/mct_epoch5_merge.pth"
   METHOD: "CIR"
   METRIC: "model"
   SIM_TH: 0.8
