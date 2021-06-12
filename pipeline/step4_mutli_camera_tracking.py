@@ -148,13 +148,15 @@ def match_track(model, query_ft, gallery_fts):
     data = torch.stack(tracklets)
     with torch.no_grad():
         data = data.to(device)
-        preds = model(data)
+        A = model(data)
+        # preds = A[0][1:]
+        preds = model.random_walk(A)
         sort_preds = torch.sort(preds, descending=True)
         # print (sort_preds)
         std = preds.std()
         mean = preds.mean()
         # match_idx = sort_preds.indices[sort_preds.values > SIM_TH]
-        match_idx = sort_preds.indices[sort_preds.values > mean + 1.5 * std]
+        match_idx = sort_preds.indices[sort_preds.values > mean + std]
         match_idx = match_idx.cpu().numpy().tolist()
         # if float(len(match_idx)) / preds.size(0) > 0.15:
         #     return []

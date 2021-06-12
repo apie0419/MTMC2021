@@ -10,7 +10,6 @@ path = cfg.PATH.VALID_PATH
 tracklets_file = os.path.join(path, "gt_features.txt")
 easy_output_file = os.path.join(path, "mtmc_easy_binary_multicam.txt")
 hard_output_file = os.path.join(path, "mtmc_hard_binary_multicam.txt")
-NUM_OBJECTS = 16
 
 def read_feature_file(filename):
     data_dict = dict()
@@ -65,10 +64,18 @@ def main():
     all_cameras = list(data_dict.keys())
     for qid in tqdm(id_dict, desc="Preparing Data"):
         q_exist_cams = id_dict[qid]
-        
         if len(q_exist_cams) < 3:
             continue
+        
         for qcam in q_exist_cams:
+            if qcam not in hard_res_dict:
+                hard_res_dict[qcam] = dict()
+            if qid not in hard_res_dict[qcam]:
+                hard_res_dict[qcam][qid] = list()
+            if qcam not in easy_res_dict:
+                easy_res_dict[qcam] = dict()
+            if qid not in easy_res_dict[qcam]:
+                easy_res_dict[qcam][qid] = list()
             query_track = data_dict[qcam][qid]
             query_track = torch.tensor(query_track)
             mean = query_track.mean(dim=0)
@@ -77,7 +84,7 @@ def main():
             query = torch.cat((mean, std))
             hard_samples = list()
             easy_samples = list()
-            
+            pos_num = len(q_exist_cams) - 1
             ## Positive
             for p_gcam in q_exist_cams:
                 if qcam != p_gcam:
@@ -94,7 +101,9 @@ def main():
                     pos_sim.append(cos)
 
             ## Negative
-            for gid in id_dict:
+            gid_list = list(id_dict.keys())
+            random.shuffle(gid_list)
+            for gid in gid_list:
                 if qid == gid:
                     continue
                 g_exist_cams = id_dict[gid]
@@ -122,29 +131,31 @@ def main():
                         hard_samples.append((gcam, gid))
                     else:
                         easy_samples.append((gcam, gid))
-                    
-                    if len(hard_samples) == len(q_exist_cams):
-                        if qcam not in hard_res_dict:
-                            hard_res_dict[qcam] = dict()
-                        if qid not in hard_res_dict[qcam]:
-                            hard_res_dict[qcam][qid] = list()
-                        for g_pcam in q_exist_cams:
-                            hard_samples.insert(0, (g_pcam, qid))
-                        random.shuffle(hard_samples)
-                        hard_res_dict[qcam][qid].append(hard_samples)
-                        hard_samples = list()
+                    if path == cfg.PATH.VALID_PATH:
+                        if len(hard_samples) >= pos_num and len(easy_samples) >= pos_num:
+                            break
+                if path == cfg.PATH.VALID_PATH:
+                    if len(hard_samples) >= pos_num and len(easy_samples) >= pos_num:
+                        break
+            if path == cfg.PATH.VALID_PATH:
+                length = min(len(hard_samples), len(easy_samples), 1)
+            else:
+                length = min(len(hard_samples), len(easy_samples)) - pos_num
 
-                    if len(easy_samples) == len(q_exist_cams):
-                        if qcam not in easy_res_dict:
-                            easy_res_dict[qcam] = dict()
-                        if qid not in easy_res_dict[qcam]:
-                            easy_res_dict[qcam][qid] = list()
-                        for g_pcam in q_exist_cams:
-                            easy_samples.insert(0, (g_pcam, qid))
-                        random.shuffle(easy_samples)
-                        easy_res_dict[qcam][qid].append(easy_samples)
-                        easy_samples = list()
-
+            for i in range(0, length, pos_num):
+                e_samples = list()
+                h_samples = list()
+                for g_pcam in q_exist_cams:
+                    if g_pcam != qcam:
+                        e_samples.insert(0, (g_pcam, qid))
+                        h_samples.insert(0, (g_pcam, qid))
+                e_samples.extend(easy_samples[i:i+pos_num])
+                h_samples.extend(hard_samples[i:i+pos_num])
+                random.shuffle(e_samples)
+                random.shuffle(h_samples)
+                easy_res_dict[qcam][qid].append(e_samples)
+                hard_res_dict[qcam][qid].append(h_samples)
+                
     write_results(hard_res_dict, hard_output_file)
     write_results(easy_res_dict, easy_output_file)
 

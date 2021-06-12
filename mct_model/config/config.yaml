@@ -11,5 +11,5 @@ MCT:
   FEATURE_DIM: 2048
   LEARNING_RATE: 0.0001
   EPOCHS: 10
-  BATCH_SIZE: 8
-  WEIGHT: "/home/apie/projects/MTMC2021_ver2/mct_model/checkpoints/mct_epoch5_merge.pth"
+  BATCH_SIZE: 16
+  WEIGHT: "/home/apie/projects/MTMC2021_ver2/mct_model/checkpoints/mct_epoch5_hard.pth"

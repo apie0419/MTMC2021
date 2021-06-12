@@ -6,23 +6,29 @@ class Dataset(object):
 
     def __init__(self, feature_file, easy_tracklets_file, hard_tracklets_file, _type, training=True):
         self.feature_dict = self.read_feature_file(feature_file)
-        self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)
-        self.hard_data_list = self.read_tracklets_file(hard_tracklets_file)
         self._type = _type
         self.training = training
         if self.training:
             if _type == "easy":
-                self.data_list = self.easy_data_list[:len(self.hard_data_list) * 2]
+                self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)
+                self.data_list = self.easy_data_list
             elif _type == "hard":
+                self.hard_data_list = self.read_tracklets_file(hard_tracklets_file)
                 self.data_list = self.hard_data_list
             elif _type == "merge":
+                self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)
+                self.hard_data_list = self.read_tracklets_file(hard_tracklets_file)
                 self.data_list = self.easy_data_list[:len(self.hard_data_list)] + self.hard_data_list
         else:
             if _type == "easy":
-                self.data_list = self.easy_data_list[:83 * 10]
+                self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)
+                self.data_list = self.easy_data_list[:83 * 9]
             elif _type == "hard":
+                self.hard_data_list = self.read_tracklets_file(hard_tracklets_file)
                 self.data_list = self.hard_data_list[:83]
             elif _type == "merge":
+                self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)
+                self.hard_data_list = self.read_tracklets_file(hard_tracklets_file)
                 self.data_list = self.easy_data_list[:83 * 9] + self.hard_data_list[:83]
         random.shuffle(self.data_list)
 
@@ -66,10 +72,10 @@ class Dataset(object):
         return data_list
 
     def prepare_data(self):
-        if self.training and self._type == "merge":
-            random.shuffle(self.easy_data_list)
-            self.data_list = self.easy_data_list[:len(self.hard_data_list)] + self.hard_data_list
-            random.shuffle(self.data_list)
+        # if self.training and self._type == "merge":
+        #     random.shuffle(self.easy_data_list)
+        #     self.data_list = self.easy_data_list[:len(self.hard_data_list)] + self.hard_data_list
+        #     random.shuffle(self.data_list)
 
         for data in self.data_list:
             q_cam = data[0]

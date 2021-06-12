@@ -22,45 +22,34 @@ class MCT(nn.Module):
         self.gkern_sig = 20.0
         self.lamb = 0.5
         self.device = device
-        self.feature_dim = 512
         self.dropout = nn.Dropout(p=0.5)
-        self.fc1 = nn.Linear(dim * 2, dim)
-        self.fc2 = nn.Linear(dim, 1024)
-        self.fc3 = nn.Linear(1024, self.feature_dim)
+        self.fc1 = nn.Linear(dim, 2048)
+        self.fc2 = nn.Linear(2048, 1024)
+        self.fc3 = nn.Linear(1024, 512)
         
-        self.att_fc = nn.Linear(self.feature_dim, self.feature_dim)
-        self.att_fc2 = nn.Linear(self.feature_dim, self.feature_dim)
-        self.att_fc3 = nn.Linear(self.feature_dim, self.feature_dim)
-        self.sim_fc = nn.Linear(self.feature_dim, 1)
-        self.cam_fc1 = nn.Linear(dim, self.feature_dim)
-        self.cam_fc2 = nn.Linear(self.feature_dim, 36)
+        self.att_fc = nn.Linear(dim, dim)
+        self.sim_fc = nn.Linear(512, 1)
+        self.cam_fc1 = nn.Linear(dim, dim)
+        self.cam_fc2 = nn.Linear(dim, 512)
+        self.cam_fc3 = nn.Linear(512, 36)
         
         self.fc1.apply(weights_init_kaiming)
         self.fc2.apply(weights_init_kaiming)
+        self.fc3.apply(weights_init_kaiming)
         self.att_fc.apply(weights_init_kaiming)
-        self.att_fc2.apply(weights_init_kaiming)
-        self.att_fc3.apply(weights_init_kaiming)
         self.sim_fc.apply(weights_init_classifier)
         self.cam_fc1.apply(weights_init_kaiming)
-        self.cam_fc2.apply(weights_init_classifier)
+        self.cam_fc2.apply(weights_init_kaiming)
+        self.cam_fc3.apply(weights_init_classifier)
 
     def attn(self, _input):
-        # print (_input)
-        # query = self.att_fc(_input)
-        # key = self.att_fc2(_input)
-        # value = self.att_fc3(_input)
         x = self.att_fc(_input)
         output = x @ _input.T
-        # output = _input @ _input.T
         return output
 
     def projection_ratio(self, f):
         scores = self.attn(f)
-        # query, key, value = self.attn(f)
-        # scores = query @ key.T
         ind = np.diag_indices(scores.size()[0])
-        # mag = torch.norm(value, p=2, dim=1) ** 2
-        # S = (scores / mag).T
         fj_prime_mag = torch.norm(f, p=2, dim=1) ** 2
         S = (scores / fj_prime_mag).T
         S = S.view(self.num_tracklets, self.num_tracklets, 1)
@@ -88,36 +77,35 @@ class MCT(nn.Module):
         self.num_tracklets, _ = f.size()
 
         copy_f = Variable(f.clone(), requires_grad=True)
-        # f = F.relu(self.fc1(f))
-        # f = self.dropout(f)
         cam_f = F.relu(self.cam_fc1(copy_f))
         # f -= cam_f
         cam_f = F.relu(self.cam_fc2(cam_f))
-        cams = F.softmax(cam_f, dim=0)
+        cams = self.cam_fc3(cam_f)
+        
 
         # S = self.projection_ratio(f)
         f = f.expand(self.num_tracklets, self.num_tracklets, 4096).permute(1, 0, 2)
         # fij = f * S
         fij = f.permute(1, 0, 2) ## 不做投影
-        dist = torch.cat((fij, f), 2)
-        # dist = torch.abs(fij - f)
+        # dist = torch.cat((fij, f), 2)
+        dist = torch.abs(fij - f)
         dist = F.relu(self.fc1(dist))
-        dist = self.dropout(dist)
         dist = F.relu(self.fc2(dist))
-        dist = self.dropout(dist)
         dist = F.relu(self.fc3(dist))
-        dist = self.dropout(dist)
+        if self.training:
+            dist = self.dropout(dist)
         A = torch.sigmoid(self.sim_fc(dist))
         A = A.view(A.size(0), A.size(1))
         
         # P = A[0][1:]
-        P = self.random_walk(A)
+        # P = (P - P.mean())
+        # P = P * 100
+        # P = torch.sigmoid(P)
+
         if self.training:
-            # return P, value[:, 0], fij, cams
-            # return P, f[:, 0], fij
-            return P, f[:, 0], fij, cams
+            return A, f[:, 0], fij, cams
         else:
-            return P
+            return A
 
 
 if __name__ == "__main__":

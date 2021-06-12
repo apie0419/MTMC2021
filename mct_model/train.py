@@ -18,24 +18,27 @@ LEARNING_RATE = cfg.MCT.LEARNING_RATE
 EPOCHS        = cfg.MCT.EPOCHS
 BATCH_SIZE    = cfg.MCT.BATCH_SIZE
 OUTPUT_PATH   = cfg.PATH.OUTPUT_PATH
+RW            = cfg.MCT.RW
 
 device = torch.device(DEVICE + ':' + str(GPU))
 model = build_model(cfg, device)
 tracklets_file = os.path.join(cfg.PATH.TRAIN_PATH, "gt_features.txt")
 valid_tracklet_file = os.path.join(cfg.PATH.VALID_PATH, "gt_features.txt")
-train_type = "merge"
-valid_type = "merge"
 easy_file = "mtmc_easy_binary_multicam.txt"
 hard_file = "mtmc_hard_binary_multicam.txt"
 easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, easy_file)
 hard_train_file = os.path.join(cfg.PATH.TRAIN_PATH, hard_file)
 easy_valid_file = os.path.join(cfg.PATH.VALID_PATH, easy_file)
 hard_valid_file = os.path.join(cfg.PATH.VALID_PATH, hard_file)
-dataset = Dataset(tracklets_file, easy_train_file, hard_train_file, train_type, training=True)
-valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, valid_type, training=False)
+easy_dataset = Dataset(tracklets_file, easy_train_file, hard_train_file, "easy", training=True)
+merge_dataset = Dataset(tracklets_file, easy_train_file, hard_train_file, "merge", training=True)
+easy_valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, "easy", training=False)
+hard_valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, "hard", training=False)
 criterion = build_loss(device)
 
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
+
+output_file_name = "baseline+RW"
 
 if not os.path.exists(OUTPUT_PATH):
     os.mkdir(OUTPUT_PATH)
@@ -44,15 +47,19 @@ lr = LEARNING_RATE
 epochs = EPOCHS
 model.train()
 
-def validation(model):
+def validation(model, valid_dataset, epoch):
     ap_list = list()
     loss_list = list()
     with torch.no_grad():
         for data, target, cams_target in valid_dataset.prepare_data():
             count = 0.
             data, target, cams_target = data.to(device), target.to(device), cams_target.to(device)
-            # preds = model(data)
-            preds, f_prime, fij, cams = model(data)
+            A, f_prime, fij, cams = model(data)
+            
+            if epoch >= 6 and RW:
+                preds = model.random_walk(A)
+            else:
+                preds = A[0][1:]
             triplet, cross, camLoss = criterion(f_prime, fij, target, preds, cams, cams_target)
             sort_preds = torch.argsort(preds, descending=True)
             target_list = target.cpu().numpy().tolist()
@@ -72,14 +79,20 @@ def validation(model):
     return _map, avg_loss
 
 for epoch in range(1, epochs + 1):
+    if epoch >= 6:
+        dataset = merge_dataset
+        optimizer = SGD(model.parameters(), lr=LEARNING_RATE * 0.5, momentum=0.9)
+    else:
+        dataset = merge_dataset
     total_ap = 0.
     count = 0.
     loss = 0.
     triplet_loss = 0.
     cross_loss = 0.
     cam_loss = 0.
-    triplet_loss_list, cross_loss_list, ap_list = list(), list(), list()
+    triplet_loss_list, cross_loss_list, cam_loss_list, ap_list = list(), list(), list(), list()
     iterations = 1
+    
     if len(dataset) % BATCH_SIZE == 0:
         total = int(len(dataset) / BATCH_SIZE)
     else:
@@ -90,10 +103,13 @@ for epoch in range(1, epochs + 1):
     for data, target, cams_target in dataset.prepare_data():
         
         data, target, cams_target = data.to(device), target.to(device), cams_target.to(device)
-        preds, f_prime, fij, cams = model(data)
+        A, f_prime, fij, cams = model(data)
+        
+        if epoch >= 6 and RW:
+            preds = model.random_walk(A)
+        else:
+            preds = A[0][1:]
         triplet, cross, camLoss = criterion(f_prime, fij, target, preds, cams, cams_target)
-        # preds, f_prime, fij = model(data)
-        # triplet, cross = criterion(f_prime, fij, target, preds)
         triplet_loss += triplet.cpu().item()
         cross_loss += cross.cpu().item()
         cam_loss += camLoss.cpu().item()
@@ -103,11 +119,13 @@ for epoch in range(1, epochs + 1):
             loss /= BATCH_SIZE
             triplet_loss /= BATCH_SIZE
             cross_loss /= BATCH_SIZE
+            cam_loss /= BATCH_SIZE
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             cross_loss_list.append(cross_loss)
             triplet_loss_list.append(triplet_loss)
+            cam_loss_list.append(cam_loss)
             _ap = total_ap / BATCH_SIZE
             ap_list.append(_ap)
             
@@ -137,13 +155,14 @@ for epoch in range(1, epochs + 1):
         count = 0.
         
     _map = np.array(ap_list).mean()
+    avg_cam = np.array(cam_loss_list).mean()
     avg_cross = np.array(cross_loss_list).mean()
     avg_triplet = np.array(triplet_loss_list).mean()
-    valid_map, valid_loss = validation(model)
-    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"mct_epoch{epoch}_{train_type}.pth"))
-    pbar.set_description("Epoch {}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Map={:.2f}%, Valid_Map={:.2f}%, Valid_Loss={:.4f}".format(epoch, avg_triplet, avg_cross, _map, valid_map, valid_loss))
-    if epoch % 10 == 0:
-        lr *= 0.8
-        optimizer = Adam(model.parameters(), lr=lr)
+    easy_valid_map, easy_valid_loss = validation(model, easy_valid_dataset, epoch)
+    hard_valid_map, hard_valid_loss = validation(model, hard_valid_dataset, epoch)
+    # easy_valid_map, easy_valid_loss = 0, 0
+    # hard_valid_map, hard_valid_loss = 0, 0
+    torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"{output_file_name}_{epoch}.pth"))
     pbar.close()
+    print("Epoch {}, Avg_Triplet={:.4f}, Avg_Cam={:.4f}, Avg_Cross={:.4f}, Map={:.2f}%\nEasy_Valid_Map={:.2f}%, Easy_Valid_Loss={:.4f}, Hard_Valid_Map={:.2f}%, Hard_Valid_Loss={:.4f}".format(epoch, avg_triplet, avg_cam, avg_cross, _map, easy_valid_map, easy_valid_loss, hard_valid_map, hard_valid_loss))
     
