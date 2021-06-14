@@ -18,7 +18,7 @@ class Dataset(object):
             elif _type == "merge":
                 self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)
                 self.hard_data_list = self.read_tracklets_file(hard_tracklets_file)
-                self.data_list = self.easy_data_list[:len(self.hard_data_list)] + self.hard_data_list
+                self.data_list = self.easy_data_list[:300] + self.hard_data_list[:300]
         else:
             if _type == "easy":
                 self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)

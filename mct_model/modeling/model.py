@@ -96,12 +96,7 @@ class MCT(nn.Module):
             dist = self.dropout(dist)
         A = torch.sigmoid(self.sim_fc(dist))
         A = A.view(A.size(0), A.size(1))
-        
-        # P = A[0][1:]
-        # P = (P - P.mean())
-        # P = P * 100
-        # P = torch.sigmoid(P)
-
+    
         if self.training:
             return A, f[:, 0], fij, cams
         else:

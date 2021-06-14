@@ -20,5 +20,6 @@ _C.MCT.LEARNING_RATE = 0.02
 _C.MCT.EPOCHS = 10
 _C.MCT.BATCH_SIZE = 64
 _C.MCT.WEIGHT = '<path_to_weight>'
+_C.MCT.RW     = True
 
 _C.merge_from_file(os.path.join(BASE_PATH, "config.yaml"))

@@ -6,10 +6,10 @@ from config      import cfg
 
 init_path()
 
-path = cfg.PATH.VALID_PATH
+path = cfg.PATH.TRAIN_PATH
 tracklets_file = os.path.join(path, "gt_features.txt")
-easy_output_file = os.path.join(path, "mtmc_easy_binary_multicam.txt")
-hard_output_file = os.path.join(path, "mtmc_hard_binary_multicam.txt")
+easy_output_file = os.path.join(path, "mtmc_easy_binary_multicam_new.txt")
+hard_output_file = os.path.join(path, "mtmc_hard_binary_multicam_new.txt")
 
 def read_feature_file(filename):
     data_dict = dict()

@@ -1,4 +1,4 @@
-import os, torch, time, random
+import os, torch, time, random, argparse
 import numpy as np
 
 from tqdm        import tqdm
@@ -38,7 +38,12 @@ criterion = build_loss(device)
 
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
 
-output_file_name = "baseline+RW"
+parser = argparse.ArgumentParser()
+parser.add_argument("-o", "--output", type=str)
+parser.parse_args()
+args = parser.parse_args()
+
+output_file_name = args.output
 
 if not os.path.exists(OUTPUT_PATH):
     os.mkdir(OUTPUT_PATH)
@@ -56,10 +61,14 @@ def validation(model, valid_dataset, epoch):
             data, target, cams_target = data.to(device), target.to(device), cams_target.to(device)
             A, f_prime, fij, cams = model(data)
             
-            if epoch >= 6 and RW:
+            if epoch >= 1 and RW:
                 preds = model.random_walk(A)
             else:
                 preds = A[0][1:]
+            # preds = model.random_walk(A)
+            preds = (preds - preds.mean())
+            preds = preds * 100
+            preds = torch.sigmoid(preds)
             triplet, cross, camLoss = criterion(f_prime, fij, target, preds, cams, cams_target)
             sort_preds = torch.argsort(preds, descending=True)
             target_list = target.cpu().numpy().tolist()
@@ -105,10 +114,14 @@ for epoch in range(1, epochs + 1):
         data, target, cams_target = data.to(device), target.to(device), cams_target.to(device)
         A, f_prime, fij, cams = model(data)
         
-        if epoch >= 6 and RW:
+        if epoch >= 1 and RW:
             preds = model.random_walk(A)
         else:
             preds = A[0][1:]
+        # preds = model.random_walk(A)
+        preds = (preds - preds.mean())
+        preds = preds * 100
+        preds = torch.sigmoid(preds)
         triplet, cross, camLoss = criterion(f_prime, fij, target, preds, cams, cams_target)
         triplet_loss += triplet.cpu().item()
         cross_loss += cross.cpu().item()
