@@ -140,8 +140,8 @@ def match_track_by_cosine(query_ft, gallery_fts):
     std = affinities.std()
     mean = affinities.mean()
     
-    # match_idx = sort_preds.indices[sort_preds.values > mean + std]
-    match_idx = sort_preds.indices[sort_preds.values > SIM_TH]
+    match_idx = sort_preds.indices[sort_preds.values > mean + 2 * std]
+    # match_idx = sort_preds.indices[sort_preds.values > SIM_TH]
     match_idx = match_idx.cpu().numpy().tolist()
     # if float(len(match_idx)) / affinities.size(0) > 0.15:
     #     return []

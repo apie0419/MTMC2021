@@ -18,7 +18,7 @@ class Dataset(object):
             elif _type == "merge":
                 self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)
                 self.hard_data_list = self.read_tracklets_file(hard_tracklets_file)
-                self.data_list = self.easy_data_list[:300] + self.hard_data_list[:300]
+                self.data_list = self.easy_data_list + self.hard_data_list
         else:
             if _type == "easy":
                 self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)
@@ -65,17 +65,16 @@ class Dataset(object):
                 for i, word in enumerate(words[2].split(',')):
                     gcam, g_id = word.split('/')
                     if g_id == q_id:
-                        labels.append(i)
+                        labels.append(1)
+                    else:
+                        labels.append(0)
                     g_ids.append([gcam, g_id])
                 data_list.append([q_cam, q_id, g_ids, labels])
         
         return data_list
 
     def prepare_data(self):
-        # if self.training and self._type == "merge":
-        #     random.shuffle(self.easy_data_list)
-        #     self.data_list = self.easy_data_list[:len(self.hard_data_list)] + self.hard_data_list
-        #     random.shuffle(self.data_list)
+        
 
         for data in self.data_list:
             q_cam = data[0]
@@ -106,7 +105,7 @@ class Dataset(object):
                 if gcam > 4:
                     gcam -= 4
                 cam_label.append(gcam)
-            labels = torch.tensor(labels).long()
+            labels = torch.tensor(labels).float()
             cam_label = torch.tensor(cam_label).long()
             tracklets.extend(gallery_tracks)
             tracklets_ft = torch.stack(tracklets)

@@ -17,6 +17,7 @@ _C.DEVICE.TYPE = "<cuda or cpu>"
 
 _C.MCT.FEATURE_DIM = 2048
 _C.MCT.LEARNING_RATE = 0.02
+_C.MCT.WEIGHT_DECAY = 0.3
 _C.MCT.EPOCHS = 10
 _C.MCT.BATCH_SIZE = 64
 _C.MCT.WEIGHT = '<path_to_weight>'

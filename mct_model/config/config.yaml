@@ -10,8 +10,9 @@ DEVICE:
 MCT:
   FEATURE_DIM: 2048
   LEARNING_RATE: 0.001
-  EPOCHS: 5
+  WEIGHT_DECAY: 0.3
+  EPOCHS: 10
   BATCH_SIZE: 16
-  RW: True
+  RW: False
   WEIGHT: "/home/apie/projects/MTMC2021_ver2/mct_model/checkpoints/mct_epoch5_hard.pth"
   
