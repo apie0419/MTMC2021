@@ -1,6 +1,6 @@
 #!/bin/bash
 
-filename="baseline"
+filename="baseline+denoise+RW+pro"
 
 if [[ ! -e /home/apie/projects/MTMC2021_ver2/mct_model/logs ]]; then
     mkdir /home/apie/projects/MTMC2021_ver2/mct_model/logs

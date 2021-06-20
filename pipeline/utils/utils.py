@@ -15,13 +15,9 @@ def getdistance(pt1, pt2):
     return distance
 
 def cosine(vec1, vec2):
-    
-    num = float(np.matmul(vec1, vec2))
-    s = np.linalg.norm(vec1) * np.linalg.norm(vec2)
-    if s == 0:
-        result = 0.0
-    else:
-        result = num/s
+    num = np.dot(vec1, vec2)
+    s = np.linalg.norm(vec1) * np.linalg.norm(vec2, axis=0)
+    result = num/s
     return result
 
 def compute_iou(box1, box2):

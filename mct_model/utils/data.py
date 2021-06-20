@@ -29,7 +29,7 @@ class Dataset(object):
             elif _type == "merge":
                 self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)
                 self.hard_data_list = self.read_tracklets_file(hard_tracklets_file)
-                self.data_list = self.easy_data_list[:83 * 9] + self.hard_data_list[:83]
+                self.data_list = self.easy_data_list + self.hard_data_list
         random.shuffle(self.data_list)
 
     def __len__(self):

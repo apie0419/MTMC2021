@@ -63,11 +63,11 @@ def validation(model, valid_dataset):
             data, target, cams_target = data.to(device), target.to(device), cams_target.to(device)
             A, f_prime, fij, cams = model(data)
             
-            if RW:
+            if RW and A.size(0) > 2:
                 preds = model.random_walk(A)
                 preds = (preds - preds.mean())
                 preds = preds * 100
-                preds = torch.sigmoid(preds)
+                preds = torch.sigmoid(preds)    
             else:
                 preds = A[0][1:]
             
@@ -104,7 +104,7 @@ for epoch in range(1, epochs + 1):
         data, target, cams_target = data.to(device), target.to(device), cams_target.to(device)
         A, f_prime, fij, cams = model(data)
         
-        if RW:
+        if RW and A.size(0) > 2:
             preds = model.random_walk(A)
             preds = (preds - preds.mean())
             preds = preds * 100
@@ -115,12 +115,12 @@ for epoch in range(1, epochs + 1):
         cross, camLoss = criterion(f_prime, fij, target, preds, cams, cams_target)
         cross_loss += cross.cpu().item()
         cam_loss += camLoss.cpu().item()
-        loss += cross
-        # copy_preds = Variable(preds.clone(), requires_grad=False)
-        # copy_preds = copy_preds.cpu().numpy()
-        # target = target.cpu().numpy()
-        # ap = average_precision_score(target, copy_preds)
-        # total_ap += ap * 100.
+        loss += cross + camLoss
+        copy_preds = Variable(preds.clone(), requires_grad=False)
+        copy_preds = copy_preds.cpu().numpy()
+        target = target.cpu().numpy()
+        ap = average_precision_score(target, copy_preds)
+        total_ap += ap * 100.
         if (iterations % BATCH_SIZE == 0) or (iterations == len(dataset)):
             loss /= BATCH_SIZE
             cross_loss /= BATCH_SIZE
@@ -150,7 +150,7 @@ for epoch in range(1, epochs + 1):
     hard_valid_map, hard_valid_loss = validation(model, hard_valid_dataset)
     torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"{output_file_name}_{epoch}.pth"))
     pbar.close()
-    print("Epoch {}, LR={}, Avg_Cross={:.4f}, Easy_Valid_Loss={:.4f}, Hard_Valid_Loss={:.4f}".format(epoch, scheduler.get_last_lr()[0], avg_cross, easy_valid_loss, hard_valid_loss))
+    # print("Epoch {}, LR={}, Avg_Cross={:.4f}, Easy_Valid_Loss={:.4f}, Hard_Valid_Loss={:.4f}".format(epoch, scheduler.get_last_lr()[0], avg_cross, easy_valid_loss, hard_valid_loss))
     scheduler.step()
-    # print("Epoch {}, Avg_Cam={:.4f}, Avg_Cross={:.4f}, Map={:.2f}%\nEasy_Valid_Map={:.2f}%, Easy_Valid_Loss={:.4f}, Hard_Valid_Map={:.2f}%, Hard_Valid_Loss={:.4f}".format(epoch, avg_cam, avg_cross, _map, easy_valid_map, easy_valid_loss, hard_valid_map, hard_valid_loss))
+    print("Epoch {}, Avg_Cam={:.4f}, Avg_Cross={:.4f}, Map={:.2f}%\nEasy_Valid_Map={:.2f}%, Easy_Valid_Loss={:.4f}, Hard_Valid_Map={:.2f}%, Hard_Valid_Loss={:.4f}".format(epoch, avg_cam, avg_cross, _map, easy_valid_map, easy_valid_loss, hard_valid_map, hard_valid_loss))
     

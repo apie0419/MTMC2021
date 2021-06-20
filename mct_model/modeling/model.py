@@ -78,15 +78,15 @@ class MCT(nn.Module):
 
         copy_f = Variable(f.clone(), requires_grad=True)
         cam_f = F.relu(self.cam_fc1(copy_f))
-        # f -= cam_f
+        f -= cam_f
         cam_f = F.relu(self.cam_fc2(cam_f))
         cams = self.cam_fc3(cam_f)
         
 
-        # S = self.projection_ratio(f)
+        S = self.projection_ratio(f)
         f = f.expand(self.num_tracklets, self.num_tracklets, 4096).permute(1, 0, 2)
-        # fij = f * S
-        fij = f.permute(1, 0, 2) ## 不做投影
+        fij = f * S
+        # fij = f.permute(1, 0, 2) ## 不做投影
         # dist = torch.cat((fij, f), 2)
         dist = torch.abs(fij - f)
         dist = F.relu(self.fc1(dist))

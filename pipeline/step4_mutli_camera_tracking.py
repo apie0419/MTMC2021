@@ -16,6 +16,7 @@ check_setting(cfg)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-w", "--weight", type=str, default=cfg.MCT.WEIGHT)
+parser.add_argument("-s", "--sim_th", type=float, default=cfg.MCT.SIM_TH)
 parser.parse_args()
 args = parser.parse_args()
 
@@ -29,8 +30,9 @@ GPUS        = cfg.DEVICE.GPUS
 device      = torch.device(f"{DEVICE}:{GPUS[0]}")
 METHOD      = cfg.MCT.METHOD
 METRIC      = cfg.MCT.METRIC
-SIM_TH      = cfg.MCT.SIM_TH
+SIM_TH      = args.sim_th
 CIR_TH      = cfg.MCT.CIR_TH
+RW          = cfg.MCT.RW
 
 write_lock  = mp.Lock()
 
@@ -128,23 +130,35 @@ def get_feature_dict(data, camera_dirs):
 
     return feature_dict
 
-def match_track_by_cosine(query_ft, gallery_fts):
-
+def match_track_by_cosine(model, query_ft, gallery_fts):
+    all_fts = [query_ft] + gallery_fts
     affinity_list = list()
-    for gallery_ft in gallery_fts:
-        aff = cosine(query_ft, gallery_ft)
-        affinity_list.append(aff)
-    affinities = torch.tensor(affinity_list)
 
-    sort_preds = torch.sort(affinities, descending=True)
-    std = affinities.std()
-    mean = affinities.mean()
+    for i, qft in enumerate(all_fts):
+        fts_tensor = torch.stack(all_fts)
+        aff = cosine(qft, fts_tensor.T)
+        aff = torch.tensor(aff)
+        affinity_list.append(aff)
     
-    match_idx = sort_preds.indices[sort_preds.values > mean + 2 * std]
-    # match_idx = sort_preds.indices[sort_preds.values > SIM_TH]
-    match_idx = match_idx.cpu().numpy().tolist()
-    # if float(len(match_idx)) / affinities.size(0) > 0.15:
-    #     return []
+    A = torch.stack(affinity_list)
+    A = torch.nan_to_num(A)
+    A = A.clamp(0, 1)
+    with torch.no_grad():
+        A = A.to(device)
+        if RW and A.size(0) > 2:
+            preds = model.random_walk(A)
+            preds = (preds - preds.mean())
+            preds = preds * 100
+            preds = torch.sigmoid(preds)
+        else:
+            preds = A[0][1:]
+    
+        sort_preds = torch.sort(preds, descending=True)
+        std = preds.std()
+        mean = preds.mean()
+        
+        match_idx = sort_preds.indices[sort_preds.values > SIM_TH]
+        match_idx = match_idx.cpu().numpy().tolist()
 
     return match_idx
         
@@ -155,22 +169,21 @@ def match_track(model, query_ft, gallery_fts):
     data = torch.stack(tracklets)
     with torch.no_grad():
         data = data.to(device)
+        
         A = model(data)
-        # preds = A[0][1:]
-        preds = model.random_walk(A)
-        preds = (preds - preds.mean())
-        preds = preds * 100
-        preds = torch.sigmoid(preds)
+        if RW and A.size(0) > 2:
+            preds = model.random_walk(A)
+            preds = (preds - preds.mean())
+            preds = preds * 100
+            preds = torch.sigmoid(preds)
+        else:
+            preds = A[0][1:]
         
         sort_preds = torch.sort(preds, descending=True)
-        # print (sort_preds)
         std = preds.std()
         mean = preds.mean()
         match_idx = sort_preds.indices[sort_preds.values > SIM_TH]
-        # match_idx = sort_preds.indices[sort_preds.values > mean + std]
         match_idx = match_idx.cpu().numpy().tolist()
-        # if float(len(match_idx)) / preds.size(0) > 0.15:
-        #     return []
     
     return match_idx
 
@@ -320,7 +333,7 @@ def main(data, camera_dirs):
                     if METRIC == "model":
                         match_idx = match_track(model, query_ft, gallery_fts)
                     elif METRIC == "cosine":
-                        match_idx = match_track_by_cosine(query_ft, gallery_fts)
+                        match_idx = match_track_by_cosine(model, query_ft, gallery_fts)
                     if len(match_idx) == 0:
                         continue
                     match_cameras = list()
@@ -342,7 +355,7 @@ def main(data, camera_dirs):
                     if METRIC == "model":
                         match_idx = match_track(model, query_ft, gallery_fts)
                     elif METRIC == "cosine":
-                        match_idx = match_track_by_cosine(query_ft, gallery_fts)
+                        match_idx = match_track_by_cosine(model, query_ft, gallery_fts)
                     if len(match_idx) > 0:
                         idx = match_idx[0]
                         g_camera = idx_camera_dict[idx]
