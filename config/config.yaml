@@ -15,10 +15,10 @@ REID:
 
 MCT:
   FEATURE_DIM: 2048
-  WEIGHT: "/home/apie/projects/MTMC2021_ver2/mct_model/checkpoints/baseline_best.pth"
+  WEIGHT: "/home/apie/projects/MTMC2021_ver2/mct_model/checkpoints/baseline+RW_best.pth"
   METHOD: "CIR"
   METRIC: "model"
-  SIM_TH: 0.9
+  SIM_TH: 0.95
   CIR_TH: 0.8
   RW: True
 

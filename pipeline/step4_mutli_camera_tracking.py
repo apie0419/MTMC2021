@@ -134,7 +134,7 @@ def match_track_by_cosine(model, query_ft, gallery_fts):
     all_fts = [query_ft] + gallery_fts
     affinity_list = list()
 
-    for i, qft in enumerate(all_fts):
+    for qft in all_fts:
         fts_tensor = torch.stack(all_fts)
         aff = cosine(qft, fts_tensor.T)
         aff = torch.tensor(aff)

@@ -44,7 +44,7 @@ class MCT(nn.Module):
 
     def attn(self, _input):
         x = self.att_fc(_input)
-        output = x @ _input.T
+        output = _input @ _input.T
         return output
 
     def projection_ratio(self, f):
@@ -82,13 +82,11 @@ class MCT(nn.Module):
         cam_f = F.relu(self.cam_fc2(cam_f))
         cams = self.cam_fc3(cam_f)
         
-
-        S = self.projection_ratio(f)
+        # S = self.projection_ratio(f)
         f = f.expand(self.num_tracklets, self.num_tracklets, 4096).permute(1, 0, 2)
-        fij = f * S
-        # fij = f.permute(1, 0, 2) ## 不做投影
-        # dist = torch.cat((fij, f), 2)
-        dist = torch.abs(fij - f)
+        # fij = f * S
+        fij = f.permute(1, 0, 2) ## 不做投影
+        dist = (fij - f) ** 2
         dist = F.relu(self.fc1(dist))
         dist = F.relu(self.fc2(dist))
         dist = F.relu(self.fc3(dist))

@@ -1,9 +1,9 @@
 #!/bin/bash
 
-weight="/home/apie/projects/MTMC2021_ver2/mct_model/checkpoints/baseline_3.pth"
-filename="cosine+RW_th_exp"
+weight="/home/apie/projects/MTMC2021_ver2/mct_model/checkpoints/baseline+denoise+RW+pro_10.pth"
+filename="baseline+RW+denoise+cpro_th_exp"
 
-for i in `seq 0.6 0.05 0.95`;
+for i in `seq 0.3 0.05 0.95`;
 do  
     cd /home/apie/projects/MTMC2021_ver2/pipeline
     python step4_mutli_camera_tracking.py -w "$weight" -s $i > /dev/null 2>&1

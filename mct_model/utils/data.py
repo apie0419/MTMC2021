@@ -86,7 +86,7 @@ class Dataset(object):
             if qcam > 4:
                 qcam -= 4
             cam_label = [qcam]
-            
+            ap_labels = [int(q_id)]
             query_track = self.feature_dict[q_cam][q_id]
             query_track = torch.tensor(query_track)
             mean = query_track.mean(dim=0)
@@ -95,6 +95,7 @@ class Dataset(object):
             tracklets = [query]
             gallery_tracks = list()
             for gcam, g_id in g_ids:
+                ap_labels.append(int(g_id))
                 gallery_track = torch.tensor(self.feature_dict[gcam][g_id])
                 mean = gallery_track.mean(dim=0)
                 std  = gallery_track.std(dim=0, unbiased=False)
@@ -106,11 +107,12 @@ class Dataset(object):
                     gcam -= 4
                 cam_label.append(gcam)
             labels = torch.tensor(labels).float()
+            ap_labels = torch.tensor(ap_labels).long()
             cam_label = torch.tensor(cam_label).long()
             tracklets.extend(gallery_tracks)
             tracklets_ft = torch.stack(tracklets)
 
-            yield tracklets_ft, labels, cam_label
+            yield tracklets_ft, labels, cam_label, ap_labels
 
 
 if __name__ == '__main__':
