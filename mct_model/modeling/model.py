@@ -19,7 +19,6 @@ class MCT(nn.Module):
     
     def __init__(self, dim, device):
         super(MCT, self).__init__()
-        self.gkern_sig = 20.0
         self.lamb = 0.5
         self.device = device
         self.dropout = nn.Dropout(p=0.5)
@@ -37,7 +36,7 @@ class MCT(nn.Module):
         self.fc2.apply(weights_init_kaiming)
         self.fc3.apply(weights_init_kaiming)
         self.att_fc.apply(weights_init_kaiming)
-        self.sim_fc.apply(weights_init_classifier)
+        self.sim_fc.apply(weights_init_kaiming)
         self.cam_fc1.apply(weights_init_kaiming)
         self.cam_fc2.apply(weights_init_kaiming)
         self.cam_fc3.apply(weights_init_classifier)
@@ -53,11 +52,12 @@ class MCT(nn.Module):
         fj_prime_mag = torch.norm(f, p=2, dim=1) ** 2
         S = (scores / fj_prime_mag).T
         S = S.view(self.num_tracklets, self.num_tracklets, 1)
+        S = torch.sigmoid(S)
         return S
 
     def random_walk(self, A):
         p2g = A[0][1:]
-        g2g = Variable(A[1:, 1:].clone(), requires_grad=False)
+        g2g = A[1:, 1:]
 
         g2g = g2g.view(g2g.size(0), g2g.size(0), 1)
         p2g = p2g.view(1, g2g.size(0), 1)
@@ -67,8 +67,9 @@ class MCT(nn.Module):
         A = (1 - self.lamb) * torch.inverse(one_diag - self.lamb * A)
         A = A.transpose(0, 1)
         p2g = torch.matmul(p2g.permute(2, 0, 1), A).permute(1, 2, 0).contiguous()
+        g2g = torch.matmul(g2g.permute(2, 0, 1), A).permute(1, 2, 0).contiguous()
         p2g = p2g.flatten()
-        return p2g.clamp(0, 1)
+        return p2g.clamp(0, 1), g2g.clamp(0, 1)
 
     def forward(self, f):
         """
@@ -78,7 +79,7 @@ class MCT(nn.Module):
 
         copy_f = Variable(f.clone(), requires_grad=True)
         cam_f = F.relu(self.cam_fc1(copy_f))
-        f -= cam_f
+        # f -= cam_f
         cam_f = F.relu(self.cam_fc2(cam_f))
         cams = self.cam_fc3(cam_f)
         
@@ -86,17 +87,21 @@ class MCT(nn.Module):
         f = f.expand(self.num_tracklets, self.num_tracklets, 4096).permute(1, 0, 2)
         # fij = f * S
         fij = f.permute(1, 0, 2) ## 不做投影
-        dist = (fij - f) ** 2
+        f_prime = torch.diagonal(fij, 0).t()
+        f_prime = f_prime.expand(self.num_tracklets, self.num_tracklets, 4096).permute(1, 0, 2)
+        
+        dist = abs(fij - f_prime)
         dist = F.relu(self.fc1(dist))
         dist = F.relu(self.fc2(dist))
         dist = F.relu(self.fc3(dist))
-        if self.training:
-            dist = self.dropout(dist)
-        A = torch.sigmoid(self.sim_fc(dist))
+        # if self.training:
+        #     dist = self.dropout(dist)
+        A = self.sim_fc(dist)
+        A = torch.sigmoid(A)
         A = A.view(A.size(0), A.size(1))
     
         if self.training:
-            return A, f[:, 0], fij, cams
+            return A, f_prime[:, 0], fij, cams
         else:
             return A
 
@@ -121,4 +126,5 @@ if __name__ == "__main__":
     model = MCT(feature_dim * 2, device).to(device)
     model.eval()
     output = model(tracklets)
+    model.random_walk(output)
     # print (output)

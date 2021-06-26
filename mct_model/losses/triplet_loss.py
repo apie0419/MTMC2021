@@ -12,7 +12,7 @@ class TripletLoss(object):
 
     def __call__(self, f_prime, fij, target):
         n, feat_size = f_prime.size()
-        target = target.cpu().numpy()
+        target = target.cpu().numpy()[:n-1]
         target_list = np.where(target == 1)[0].tolist()
         anchor, positive, negetive = list(), list(), list()
 

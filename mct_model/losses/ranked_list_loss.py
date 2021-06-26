@@ -61,12 +61,12 @@ def rank_loss(dist_mat, labels, margin, alpha, tval):
 class RankedLoss(object):
     "Ranked_List_Loss_for_Deep_Metric_Learning_CVPR_2019_paper"
     
-    def __init__(self, margin=0.5, alpha=0, tval=1.0):
+    def __init__(self, margin=0.5, alpha=2.0, tval=1.0):
         self.margin = margin
         self.alpha = alpha
         self.tval = tval
         
-    def __call__(self, global_feat, labels, normalize_feature=False):
+    def __call__(self, global_feat, labels, normalize_feature=True):
         if normalize_feature:
             global_feat = normalize_rank(global_feat, axis=-1)
         dist_mat = euclidean_dist_rank(global_feat, global_feat)
