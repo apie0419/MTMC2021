@@ -12,6 +12,7 @@ def build_loss(device):
         bce = nn.BCELoss()
         ce = nn.CrossEntropyLoss()
         triplet_loss = triplet(f_prime, fij, target)
+        ranked_loss = rll(f_prime, ranked_target)
         cam_loss = ce(cams, cam_target)
         bce_loss = bce(P, target.float())
 

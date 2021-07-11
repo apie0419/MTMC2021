@@ -60,6 +60,7 @@ class MCT(nn.Module):
         fj_prime_mag = torch.norm(f, p=2, dim=1) ** 2
         S = (scores / fj_prime_mag).T
         S = S.view(self.num_tracklets, self.num_tracklets, 1)
+        S = torch.sigmoid(S)
         return S
 
     def random_walk(self, A):
@@ -74,8 +75,9 @@ class MCT(nn.Module):
         A = (1 - self.lamb) * torch.inverse(one_diag - self.lamb * A)
         A = A.transpose(0, 1)
         p2g = torch.matmul(p2g.permute(2, 0, 1), A).permute(1, 2, 0).contiguous()
+        g2g = torch.matmul(g2g.permute(2, 0, 1), A).permute(1, 2, 0).contiguous()
         p2g = p2g.flatten()
-        return p2g.clamp(0, 1)
+        return p2g.clamp(0, 1), g2g.clamp(0, 1)
 
     def forward(self, f):
         """
@@ -126,4 +128,5 @@ if __name__ == "__main__":
     model = MCT(feature_dim * 2, device).to(device)
     model.eval()
     output = model(tracklets)
+    model.random_walk(output)
     # print (output)

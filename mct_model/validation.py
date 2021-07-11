@@ -30,8 +30,8 @@ hard_file = "mtmc_hard_binary_multicam.txt"
 valid_tracklet_file = os.path.join(VALID_PATH, "gt_features.txt")
 easy_valid_file = os.path.join(cfg.PATH.VALID_PATH, easy_file)
 hard_valid_file = os.path.join(cfg.PATH.VALID_PATH, hard_file)
-easy_valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, "easy", training=False)
-hard_valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, "hard", training=False)
+easy_valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, "easy")
+hard_valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, "hard")
 
 bce = nn.BCELoss()
 

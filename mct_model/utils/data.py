@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 class Dataset(object):
 
-    def __init__(self, feature_file, easy_tracklets_file, hard_tracklets_file, _type, training=True):
+    def __init__(self, feature_file, easy_tracklets_file, hard_tracklets_file, _type):
         self.feature_dict = self.read_feature_file(feature_file)
         self._type = _type
         self.training = training
@@ -63,7 +63,6 @@ class Dataset(object):
 
     def prepare_data(self):
         
-
         for data in self.data_list:
             q_cam = data[0]
             q_id = data[1]
@@ -94,7 +93,18 @@ class Dataset(object):
                 if gcam > 4:
                     gcam -= 4
                 cam_label.append(gcam)
+
             labels = torch.tensor(labels).float()
+            tmp_labels = list()
+            tmp = ap_labels[1:]
+            n = len(tmp)
+            for i in range(n):
+                label = torch.tensor(tmp)
+                label = torch.where(label==label[i], 1, 0)
+                tmp_labels.append(label)
+            tmp_labels = torch.stack(tmp_labels)
+            tmp_labels = tmp_labels.masked_select(~torch.eye(n, dtype=bool))
+            labels = torch.cat((labels, tmp_labels)).float()
             ap_labels = torch.tensor(ap_labels).long()
             cam_label = torch.tensor(cam_label).long()
             tracklets.extend(gallery_tracks)
@@ -104,10 +114,10 @@ class Dataset(object):
 
 
 if __name__ == '__main__':
-    easy_file = "/home/apie/projects/MTMC2021/dataset/train/mtmc_train_easy.txt"
-    hard_file = "/home/apie/projects/MTMC2021/dataset/train/mtmc_train_hard.txt"
-    feature_file = "/home/apie/projects/MTMC2021/dataset/train/gt_features.txt"
-    dataset = Dataset(feature_file, easy_file, hard_file)
-    dataset_iter = dataset.prepare_data("easy")
+    easy_file = "/home/apie/projects/MTMC2021_ver2/dataset/train/mtmc_easy_binary_multicam.txt"
+    hard_file = "/home/apie/projects/MTMC2021_ver2/dataset/train/mtmc_hard_binary_multicam.txt"
+    feature_file = "/home/apie/projects/MTMC2021_ver2/dataset/train/gt_features.txt"
+    dataset = Dataset(feature_file, easy_file, hard_file, "easy")
+    dataset_iter = dataset.prepare_data()
     for _ in dataset_iter:
         pass

@@ -172,7 +172,7 @@ def match_track(model, query_ft, gallery_fts):
         
         A = model(data)
         if RW and A.size(0) > 2:
-            preds = model.random_walk(A)
+            preds, g_preds = model.random_walk(A)
             preds = (preds - preds.mean())
             preds = preds * 10
             preds = torch.sigmoid(preds)

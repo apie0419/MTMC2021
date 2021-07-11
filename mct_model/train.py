@@ -64,17 +64,20 @@ def validation(model, valid_dataset):
             A, f_prime, fij, cams = model(data)
             
             if RW and A.size(0) > 2:
-                preds = model.random_walk(A)
+                preds, g_preds = model.random_walk(A)
                 preds = (preds - preds.mean())
                 preds = preds * 10
                 preds = torch.sigmoid(preds)    
             else:
-                preds = A[0][1:]
-            
-            cross, camLoss, triplet, rankedLoss = criterion(f_prime, fij, target, preds, cams, cams_target, ranked_target)
+                preds, g_preds = A[0][1:], A[1:, 1:]
+            n = g_preds.size(0)
+            g_preds = g_preds.view(n, n)
+            g_preds = g_preds.masked_select(~torch.eye(n, dtype=bool))
+            all_preds = torch.cat((preds, g_preds))
+            cross, camLoss, triplet, rankedLoss = criterion(f_prime, fij, target, all_preds, cams, cams_target, ranked_target)
             copy_preds = Variable(preds.clone(), requires_grad=False)
             copy_preds = copy_preds.cpu().numpy()
-            target = target.cpu().numpy()
+            target = target.cpu().numpy()[:preds.size(0)]
             ap = average_precision_score(target, copy_preds)
             ap_list.append(ap * 100.)
             loss_list.append(cross.cpu().item())
@@ -104,16 +107,18 @@ for epoch in range(1, epochs + 1):
         
         data, target, cams_target, ranked_target = data.to(device), target.to(device), cams_target.to(device), ranked_target.to(device)
         A, f_prime, fij, cams = model(data)
-        
         if RW and A.size(0) > 2:
-            preds = model.random_walk(A)
+            preds, g_preds = model.random_walk(A)
             preds = (preds - preds.mean())
             preds = preds * 10
             preds = torch.sigmoid(preds)
         else:
-            preds = A[0][1:]
-        
-        cross, camLoss, triplet, rankedLoss = criterion(f_prime, fij, target, preds, cams, cams_target, ranked_target)
+            preds, g_preds = A[0][1:], A[1:, 1:]
+        n = g_preds.size(0)
+        g_preds = g_preds.view(n, n)
+        g_preds = g_preds.masked_select(~torch.eye(n, dtype=bool).to(device))
+        all_preds = torch.cat((preds, g_preds))
+        cross, camLoss, triplet, rankedLoss = criterion(f_prime, fij, target, all_preds, cams, cams_target, ranked_target)
         cross_loss += cross.cpu().item()
         cam_loss += camLoss.cpu().item() * 0.1
         triplet_loss += triplet.cpu().item() 
@@ -121,7 +126,7 @@ for epoch in range(1, epochs + 1):
         loss += cross + camLoss * 0.1 + rankedLoss * 0.2
         copy_preds = Variable(preds.clone(), requires_grad=False)
         copy_preds = copy_preds.cpu().numpy()
-        target = target.cpu().numpy()
+        target = target.cpu().numpy()[:preds.size(0)]
         ap = average_precision_score(target, copy_preds)
         total_ap += ap * 100.
         if (iterations % BATCH_SIZE == 0) or (iterations == len(dataset)):
