@@ -5,7 +5,7 @@ PATH:
 
 DEVICE:
   TYPE: "cuda"
-  GPU: 0
+  GPU: 1
 
 MCT:
   FEATURE_DIM: 2048

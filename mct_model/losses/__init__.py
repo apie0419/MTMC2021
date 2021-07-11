@@ -9,7 +9,6 @@ def build_loss(device):
         triplet = TripletLoss(device)
         rll = RankedLoss()
         ranked_loss = rll(f_prime, ranked_target)
-        # print (f_prime)
         bce = nn.BCELoss()
         ce = nn.CrossEntropyLoss()
         triplet_loss = triplet(f_prime, fij, target)

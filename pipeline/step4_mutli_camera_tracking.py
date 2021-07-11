@@ -148,7 +148,7 @@ def match_track_by_cosine(model, query_ft, gallery_fts):
         if RW and A.size(0) > 2:
             preds = model.random_walk(A)
             preds = (preds - preds.mean())
-            preds = preds * 100
+            preds = preds * 10
             preds = torch.sigmoid(preds)
         else:
             preds = A[0][1:]
@@ -174,7 +174,7 @@ def match_track(model, query_ft, gallery_fts):
         if RW and A.size(0) > 2:
             preds = model.random_walk(A)
             preds = (preds - preds.mean())
-            preds = preds * 100
+            preds = preds * 10
             preds = torch.sigmoid(preds)
         else:
             preds = A[0][1:]

@@ -6,8 +6,13 @@ from torch.autograd import Variable
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
-    nn.init.kaiming_normal_(m.weight, a=0, mode='fan_out')
-    nn.init.constant_(m.bias, 0.0)
+    if classname.find('Linear') != -1:
+        nn.init.kaiming_normal_(m.weight, a=0, mode='fan_out')
+        nn.init.constant_(m.bias, 0.0)
+    elif classname.find('BatchNorm') != -1:
+        if m.affine:
+            nn.init.constant_(m.weight, 1.0)
+            nn.init.constant_(m.bias, 0.0)
 
 def weights_init_classifier(m):
     classname = m.__class__.__name__
@@ -19,14 +24,14 @@ class MCT(nn.Module):
     
     def __init__(self, dim, device):
         super(MCT, self).__init__()
-        self.gkern_sig = 20.0
         self.lamb = 0.5
         self.device = device
-        self.dropout = nn.Dropout(p=0.5)
+        self.trans_fc1 = nn.Linear(dim, dim)
+        self.dropout = nn.Dropout(0.5)
         self.fc1 = nn.Linear(dim, 2048)
         self.fc2 = nn.Linear(2048, 1024)
         self.fc3 = nn.Linear(1024, 512)
-        
+
         self.att_fc = nn.Linear(dim, dim)
         self.sim_fc = nn.Linear(512, 1)
         self.cam_fc1 = nn.Linear(dim, dim)
@@ -36,14 +41,16 @@ class MCT(nn.Module):
         self.fc1.apply(weights_init_kaiming)
         self.fc2.apply(weights_init_kaiming)
         self.fc3.apply(weights_init_kaiming)
+        self.trans_fc1.apply(weights_init_kaiming)
         self.att_fc.apply(weights_init_kaiming)
-        self.sim_fc.apply(weights_init_classifier)
+        self.sim_fc.apply(weights_init_kaiming)
         self.cam_fc1.apply(weights_init_kaiming)
         self.cam_fc2.apply(weights_init_kaiming)
         self.cam_fc3.apply(weights_init_classifier)
 
     def attn(self, _input):
         x = self.att_fc(_input)
+        
         output = _input @ _input.T
         return output
 
@@ -57,7 +64,7 @@ class MCT(nn.Module):
 
     def random_walk(self, A):
         p2g = A[0][1:]
-        g2g = Variable(A[1:, 1:].clone(), requires_grad=False)
+        g2g = A[1:, 1:]
 
         g2g = g2g.view(g2g.size(0), g2g.size(0), 1)
         p2g = p2g.view(1, g2g.size(0), 1)
@@ -75,28 +82,26 @@ class MCT(nn.Module):
         Return an affinity map, size(f[0], f[0])
         """
         self.num_tracklets, _ = f.size()
-
+        
         copy_f = Variable(f.clone(), requires_grad=True)
         cam_f = F.relu(self.cam_fc1(copy_f))
-        f -= cam_f
+        # f -= cam_f
         cam_f = F.relu(self.cam_fc2(cam_f))
         cams = self.cam_fc3(cam_f)
-        
+        f = F.relu(self.trans_fc1(f))
         # S = self.projection_ratio(f)
         f = f.expand(self.num_tracklets, self.num_tracklets, 4096).permute(1, 0, 2)
         # fij = f * S
         fij = f.permute(1, 0, 2) ## 不做投影
-        dist = (fij - f) ** 2
+        dist = abs(fij - f)
         dist = F.relu(self.fc1(dist))
         dist = F.relu(self.fc2(dist))
         dist = F.relu(self.fc3(dist))
-        if self.training:
-            dist = self.dropout(dist)
         A = torch.sigmoid(self.sim_fc(dist))
         A = A.view(A.size(0), A.size(1))
     
         if self.training:
-            return A, f[:, 0], fij, cams
+            return A, fij[0], fij, cams
         else:
             return A
 

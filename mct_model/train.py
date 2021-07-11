@@ -39,13 +39,13 @@ easy_train_file = os.path.join(cfg.PATH.TRAIN_PATH, easy_file)
 hard_train_file = os.path.join(cfg.PATH.TRAIN_PATH, hard_file)
 easy_valid_file = os.path.join(cfg.PATH.VALID_PATH, easy_file)
 hard_valid_file = os.path.join(cfg.PATH.VALID_PATH, hard_file)
-merge_dataset = Dataset(tracklets_file, easy_train_file, hard_train_file, "merge", training=True)
-easy_valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, "easy", training=False)
-hard_valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, "hard", training=False)
+merge_dataset = Dataset(tracklets_file, easy_train_file, hard_train_file, "merge")
+easy_valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, "easy")
+hard_valid_dataset = Dataset(valid_tracklet_file, easy_valid_file, hard_valid_file, "hard")
 criterion = build_loss(device)
 
 optimizer = SGD(model.parameters(), lr=LEARNING_RATE, momentum=0.9, weight_decay=WEIGHT_DECAY)
-scheduler = lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
+scheduler = lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
 
 if not os.path.exists(OUTPUT_PATH):
     os.mkdir(OUTPUT_PATH)
@@ -66,7 +66,7 @@ def validation(model, valid_dataset):
             if RW and A.size(0) > 2:
                 preds = model.random_walk(A)
                 preds = (preds - preds.mean())
-                preds = preds * 100
+                preds = preds * 10
                 preds = torch.sigmoid(preds)    
             else:
                 preds = A[0][1:]
@@ -108,17 +108,17 @@ for epoch in range(1, epochs + 1):
         if RW and A.size(0) > 2:
             preds = model.random_walk(A)
             preds = (preds - preds.mean())
-            preds = preds * 100
+            preds = preds * 10
             preds = torch.sigmoid(preds)
         else:
             preds = A[0][1:]
         
         cross, camLoss, triplet, rankedLoss = criterion(f_prime, fij, target, preds, cams, cams_target, ranked_target)
         cross_loss += cross.cpu().item()
-        cam_loss += camLoss.cpu().item()
-        triplet_loss += triplet.cpu().item()
-        ranked_loss += rankedLoss.cpu().item() * 0.05
-        loss += cross + camLoss + 0.05 * ranked_loss
+        cam_loss += camLoss.cpu().item() * 0.1
+        triplet_loss += triplet.cpu().item() 
+        ranked_loss += rankedLoss.cpu().item() * 0.2
+        loss += cross + camLoss * 0.1 + rankedLoss * 0.2
         copy_preds = Variable(preds.clone(), requires_grad=False)
         copy_preds = copy_preds.cpu().numpy()
         target = target.cpu().numpy()
@@ -140,7 +140,7 @@ for epoch in range(1, epochs + 1):
             _ap = total_ap / BATCH_SIZE
             ap_list.append(_ap)
             
-            pbar.set_description("Epoch {}, LR={}, Cross={:.4f}, Triplet={:.4f}, RankedLoss={:.4f}, Ap={:.2f}%".format(epoch, scheduler.get_last_lr()[0], cross_loss, triplet_loss, ranked_loss, _ap))
+            pbar.set_description("Epoch {}, Cam={:.4f}, Cross={:.4f}, Triplet={:.4f}, RankedLoss={:.4f}, Ap={:.2f}%".format(epoch, camLoss, cross_loss, triplet_loss, ranked_loss, _ap))
             pbar.update()
             loss = 0.
             cross_loss = 0.
@@ -161,6 +161,6 @@ for epoch in range(1, epochs + 1):
     hard_valid_map, hard_valid_loss = validation(model, hard_valid_dataset)
     torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"{output_file_name}_{epoch}.pth"))
     pbar.close()
-    scheduler.step()
+    # scheduler.step()
     print("Epoch {}, Avg_Cam={:.4f}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Avg_RankedLoss={:.4f}, Map={:.2f}%\nEasy_Valid_Map={:.2f}%, Easy_Valid_Loss={:.4f}, Hard_Valid_Map={:.2f}%, Hard_Valid_Loss={:.4f}".format(epoch, avg_cam, avg_triplet, avg_cross, avg_rankedloss, _map, easy_valid_map, easy_valid_loss, hard_valid_map, hard_valid_loss))
     

@@ -42,14 +42,14 @@ def rank_loss(dist_mat, labels, margin, alpha, tval):
         dist_an = dist_mat[ind][is_neg]
         
         ap_is_pos = torch.clamp(torch.add(dist_ap,margin-alpha),min=0.0)
-        ap_pos_num = ap_is_pos.size(0) +1e-5
+        ap_pos_num = ap_is_pos.size(0) + 1e-5
         ap_pos_val_sum = torch.sum(ap_is_pos)
         loss_ap = torch.div(ap_pos_val_sum,float(ap_pos_num))
 
         an_is_pos = torch.lt(dist_an,alpha)
         an_less_alpha = dist_an[an_is_pos]
         an_weight = torch.exp(tval*(-1*an_less_alpha+alpha))
-        an_weight_sum = torch.sum(an_weight) +1e-5
+        an_weight_sum = torch.sum(an_weight) + 1e-5
         an_dist_lm = alpha - an_less_alpha
         an_ln_sum = torch.sum(torch.mul(an_dist_lm,an_weight))
         loss_an = torch.div(an_ln_sum,an_weight_sum)
@@ -61,12 +61,12 @@ def rank_loss(dist_mat, labels, margin, alpha, tval):
 class RankedLoss(object):
     "Ranked_List_Loss_for_Deep_Metric_Learning_CVPR_2019_paper"
     
-    def __init__(self, margin=0.5, alpha=0, tval=1.0):
+    def __init__(self, margin=1.2, alpha=1.4, tval=0):
         self.margin = margin
         self.alpha = alpha
         self.tval = tval
         
-    def __call__(self, global_feat, labels, normalize_feature=False):
+    def __call__(self, global_feat, labels, normalize_feature=True):
         if normalize_feature:
             global_feat = normalize_rank(global_feat, axis=-1)
         dist_mat = euclidean_dist_rank(global_feat, global_feat)
