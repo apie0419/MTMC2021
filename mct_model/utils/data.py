@@ -7,7 +7,6 @@ class Dataset(object):
     def __init__(self, feature_file, easy_tracklets_file, hard_tracklets_file, _type):
         self.feature_dict = self.read_feature_file(feature_file)
         self._type = _type
-        self.training = training
         if _type == "easy":
             self.easy_data_list = self.read_tracklets_file(easy_tracklets_file)
             self.data_list = self.easy_data_list

@@ -1,7 +1,7 @@
 from path import args
 import sys
 sys.path.insert(0,str(args.root_path))
-
+sys.path.insert(0,"../")
 from options import opt
 from pathlib import Path
 import os
@@ -93,14 +93,17 @@ if __name__ == '__main__':
            'c027', 'c028', 'c029', 'c033', 'c034', 'c035', 'c036']
     S06 = ['c041', 'c042', 'c043', 'c044', 'c045', 'c046']
 
-    train_S = [S01, S03, S04, S05]
-    valid_S = [S02]
+    train_S = [S01, S03, S04]
+    valid_S = [S02, S05]
 
-    train_S_dirname = ['S01', 'S03', 'S04', 'S05']
-    valid_S_dirname = ['S02']
+    train_S_dirname = ['S01', 'S03', 'S04']
+    valid_S_dirname = ['S02', 'S05']
     
     frames_path = Path(opt.data_root).joinpath('frames')
     gt_root_path = opt.raw_data_path
+    Path(opt.data_root).joinpath('reid_data/query_data').mkdir(parents=True, exist_ok=True)
+    Path(opt.data_root).joinpath('reid_data/train_data').mkdir(parents=True, exist_ok=True)
+    Path(opt.data_root).joinpath('reid_data/gallery_data').mkdir(parents=True, exist_ok=True)
 
     car_list = []
 

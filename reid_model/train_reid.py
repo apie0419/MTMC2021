@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0,"../")
+
 from options import opt
 from datasets.dataset import make_reid_dataset
 from pathlib import Path
@@ -138,7 +141,7 @@ def train():
             weight_path = Path(opt.checkpoint_dir).joinpath(f'model-{epoch+1}epoch-{best_mAP:.03f}-mAP.pth')
             torch.save(model,str(weight_path))
             torch.save({'state_dict': model.state_dict()}, str(weight_path)+'.tar')
-            visualization(loss_list, acc_list, mAP_list, epoch+1)
+            # visualization(loss_list, acc_list, mAP_list, epoch+1)
     
     record =  open("record.txt",'w')
     if 'center' in opt.metric_loss_type:
@@ -154,7 +157,7 @@ def train():
     record.close()
 
     model.load_state_dict(best_model_params)
-    weight_path = Path(opt.checkpoint_dir).joinpath(f'model-{best_mAP:.03f}-best_mAP.pth')
+    weight_path = Path(opt.checkpoint_dir).joinpath(f'model-best.pth')
     torch.save(model, str(weight_path))
     torch.save({'state_dict': model.state_dict()}, str(weight_path)+'.tar')
     visualization(loss_list, acc_list, mAP_list, epoch+1)

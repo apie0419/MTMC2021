@@ -120,10 +120,10 @@ for epoch in range(1, epochs + 1):
         all_preds = torch.cat((preds, g_preds))
         cross, camLoss, triplet, rankedLoss = criterion(f_prime, fij, target, all_preds, cams, cams_target, ranked_target)
         cross_loss += cross.cpu().item()
-        cam_loss += camLoss.cpu().item() * 0.1
+        cam_loss += camLoss.cpu().item()
         triplet_loss += triplet.cpu().item() 
-        ranked_loss += rankedLoss.cpu().item() * 0.2
-        loss += cross + camLoss * 0.1 + rankedLoss * 0.2
+        ranked_loss += rankedLoss.cpu().item() * 0.5
+        loss += cross + rankedLoss * 0.5 + camLoss
         copy_preds = Variable(preds.clone(), requires_grad=False)
         copy_preds = copy_preds.cpu().numpy()
         target = target.cpu().numpy()[:preds.size(0)]
@@ -145,7 +145,7 @@ for epoch in range(1, epochs + 1):
             _ap = total_ap / BATCH_SIZE
             ap_list.append(_ap)
             
-            pbar.set_description("Epoch {}, Cam={:.4f}, Cross={:.4f}, Triplet={:.4f}, RankedLoss={:.4f}, Ap={:.2f}%".format(epoch, camLoss, cross_loss, triplet_loss, ranked_loss, _ap))
+            pbar.set_description("Epoch {}, Cam={:.4f}, Cross={:.4f}, Triplet={:.4f}, RankedLoss={:.4f}, Ap={:.2f}%".format(epoch, cam_loss, cross_loss, triplet_loss, ranked_loss, _ap))
             pbar.update()
             loss = 0.
             cross_loss = 0.

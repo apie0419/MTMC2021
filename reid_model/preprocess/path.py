@@ -2,6 +2,6 @@ import argparse
 from pathlib import Path
 
 parser =  argparse.ArgumentParser()
-parser.add_argument('--root-path', type=str, default='/mnt/hdd1/home/joycenerd/AIC21-Track3', help='parent directory path')
+parser.add_argument('--root-path', type=str, default='/home/apie/projects/MTMC2021_ver2/dataset', help='parent directory path')
 
 args = parser.parse_args()

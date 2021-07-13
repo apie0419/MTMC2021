@@ -1,7 +1,7 @@
 import sys
 from path import args
 sys.path.insert(0,str(args.root_path))
-
+sys.path.insert(0,"../")
 from options import opt
 from pathlib import Path
 import cv2

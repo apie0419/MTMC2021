@@ -11,7 +11,7 @@ MCT:
   FEATURE_DIM: 2048
   LEARNING_RATE: 0.001
   WEIGHT_DECAY: 0.3
-  EPOCHS: 10
+  EPOCHS: 5
   BATCH_SIZE: 16
   RW: True
   WEIGHT: "/home/apie/projects/MTMC2021_ver2/mct_model/checkpoints/None_3.pth"

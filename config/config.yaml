@@ -20,7 +20,7 @@ MCT:
   METRIC: "model"
   SIM_TH: 0.95
   CIR_TH: 0.8
-  RW: False
+  RW: True
 
 DETECTION: "mask_rcnn"
 SCT: "tc"

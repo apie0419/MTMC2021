@@ -87,10 +87,10 @@ class MCT(nn.Module):
         
         copy_f = Variable(f.clone(), requires_grad=True)
         cam_f = F.relu(self.cam_fc1(copy_f))
-        # f -= cam_f
+        f -= cam_f
         cam_f = F.relu(self.cam_fc2(cam_f))
         cams = self.cam_fc3(cam_f)
-        f = F.relu(self.trans_fc1(f))
+        # f = F.relu(self.trans_fc1(f))
         # S = self.projection_ratio(f)
         f = f.expand(self.num_tracklets, self.num_tracklets, 4096).permute(1, 0, 2)
         # fij = f * S

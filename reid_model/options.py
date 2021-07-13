@@ -1,14 +1,14 @@
 import argparse
 from pathlib import Path
 
-ROOTPATH="/home/apie/projects/MTMC2021/reid_model"
+ROOTPATH="/home/apie/projects/MTMC2021_ver2/reid_model"
 
 parser =  argparse.ArgumentParser()
 
 # GENERAL SETTING
-parser.add_argument('--cuda-devices', type=int, default=4, help='gpu devices')
-parser.add_argument('--checkpoint-dir', type=str, default=str(Path(ROOTPATH).joinpath('checkpoints/nothing')), help='directory to save checkpoints')
-parser.add_argument('--raw-data-path', type=str, default=str(Path(ROOTPATH).joinpath('Data','AIC20_track3_MTMC')), help='Path of original AICITY data')
+parser.add_argument('--cuda-devices', type=int, default=1, help='gpu devices')
+parser.add_argument('--checkpoint-dir', type=str, default=str(Path(ROOTPATH).joinpath('checkpoints')), help='directory to save checkpoints')
+parser.add_argument('--raw-data-path', type=str, default=str(Path(ROOTPATH).joinpath('../','dataset')), help='Path of original AICITY data')
 parser.add_argument('--data-root', type=str, default=str(Path(ROOTPATH).joinpath('Data')), help='Data root path')
 parser.add_argument('--test-data', type=str, default=Path(ROOTPATH).joinpath('Data', 'test_data'), help='Root directory of test data')
 
