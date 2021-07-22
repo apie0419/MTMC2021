@@ -146,7 +146,7 @@ def match_track_by_cosine(model, query_ft, gallery_fts):
     with torch.no_grad():
         A = A.to(device)
         if RW and A.size(0) > 2:
-            preds = model.random_walk(A)
+            preds, g_preds = model.random_walk(A)
             preds = (preds - preds.mean())
             preds = preds * 10
             preds = torch.sigmoid(preds)
@@ -161,7 +161,41 @@ def match_track_by_cosine(model, query_ft, gallery_fts):
         match_idx = match_idx.cpu().numpy().tolist()
 
     return match_idx
+
+def match_track2(model, query_ft, gallery_fts):
+    all_fts = [query_ft] + gallery_fts
+    affinity_list = list()
+    with torch.no_grad():
+        for i, qft in enumerate(all_fts):
+            aff = list()
+            for j, gft in enumerate(all_fts):
+                if i == j:
+                    aff.append(0.)
+                else:
+                    fts_tensor = torch.stack([qft, gft])
+                    fts_tensor = fts_tensor.to(device)
+                    affinities = model(fts_tensor)
+                    aff.append(affinities.cpu().numpy()[0][1])
+            aff = torch.tensor(aff)
+            affinity_list.append(aff)
+        A = torch.stack(affinity_list)
+        A = A.to(device)
+        if RW and A.size(0) > 2:
+            preds, g_preds = model.random_walk(A)
+            preds = (preds - preds.mean())
+            preds = preds * 10
+            preds = torch.sigmoid(preds)
+        else:
+            preds = A[0][1:]
         
+        sort_preds = torch.sort(preds, descending=True)
+        std = preds.std()
+        mean = preds.mean()
+        match_idx = sort_preds.indices[sort_preds.values > SIM_TH]
+        match_idx = match_idx.cpu().numpy().tolist()
+    
+    return match_idx
+
 def match_track(model, query_ft, gallery_fts):
     
     tracklets = [query_ft]
@@ -322,7 +356,7 @@ def main(data, camera_dirs):
                     if np.isnan(direction):
                         continue
                     expected_time = getdistance(query_track.gps_list[0], gallery_track.gps_list[0]) / speed
-                    if (abs(dis_ts - expected_time) > 30) or (direction < 0.5):
+                    if abs(expected_time - dis_ts) > 30 or (direction < -0.5):
                         continue
                     
                     gallery_fts.append(feature_dict[g_camera][gid])

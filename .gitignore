@@ -7,3 +7,4 @@ new_dataset/
 *.txt
 .vscode/
 *.csv
+*.tar

@@ -61,7 +61,7 @@ def rank_loss(dist_mat, labels, margin, alpha, tval):
 class RankedLoss(object):
     "Ranked_List_Loss_for_Deep_Metric_Learning_CVPR_2019_paper"
     
-    def __init__(self, margin=1.5, alpha=2.5, tval=0):
+    def __init__(self, margin=0.8, alpha=1.4, tval=0):
         self.margin = margin
         self.alpha = alpha
         self.tval = tval

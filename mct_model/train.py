@@ -61,7 +61,7 @@ def validation(model, valid_dataset):
         for data, target, cams_target, ranked_target in valid_dataset.prepare_data():
             count = 0.
             data, target, cams_target, ranked_target = data.to(device), target.to(device), cams_target.to(device), ranked_target.to(device)
-            A, f_prime, fij, cams = model(data)
+            A, f_prime, cams = model(data)
             
             if RW and A.size(0) > 2:
                 preds, g_preds = model.random_walk(A)
@@ -74,7 +74,7 @@ def validation(model, valid_dataset):
             g_preds = g_preds.view(n, n)
             g_preds = g_preds.masked_select(~torch.eye(n, dtype=bool))
             all_preds = torch.cat((preds, g_preds))
-            cross, camLoss, triplet, rankedLoss = criterion(f_prime, fij, target, all_preds, cams, cams_target, ranked_target)
+            cross, camLoss, rankedLoss = criterion(f_prime, target, all_preds, cams, cams_target, ranked_target)
             copy_preds = Variable(preds.clone(), requires_grad=False)
             copy_preds = copy_preds.cpu().numpy()
             target = target.cpu().numpy()[:preds.size(0)]
@@ -92,9 +92,8 @@ for epoch in range(1, epochs + 1):
     loss = 0.
     cross_loss = 0.
     cam_loss = 0.
-    triplet_loss = 0.
     ranked_loss = 0.
-    cross_loss_list, cam_loss_list, triplet_loss_list, ranked_loss_list, ap_list = list(), list(), list(), list(), list()
+    cross_loss_list, cam_loss_list, ranked_loss_list, ap_list = list(), list(), list(), list()
     iterations = 1
     
     if len(dataset) % BATCH_SIZE == 0:
@@ -106,7 +105,7 @@ for epoch in range(1, epochs + 1):
     for data, target, cams_target, ranked_target in dataset.prepare_data():
         
         data, target, cams_target, ranked_target = data.to(device), target.to(device), cams_target.to(device), ranked_target.to(device)
-        A, f_prime, fij, cams = model(data)
+        A, f_prime, cams = model(data)
         if RW and A.size(0) > 2:
             preds, g_preds = model.random_walk(A)
             preds = (preds - preds.mean())
@@ -118,12 +117,11 @@ for epoch in range(1, epochs + 1):
         g_preds = g_preds.view(n, n)
         g_preds = g_preds.masked_select(~torch.eye(n, dtype=bool).to(device))
         all_preds = torch.cat((preds, g_preds))
-        cross, camLoss, triplet, rankedLoss = criterion(f_prime, fij, target, all_preds, cams, cams_target, ranked_target)
+        cross, camLoss, rankedLoss = criterion(f_prime, target, all_preds, cams, cams_target, ranked_target)
         cross_loss += cross.cpu().item()
         cam_loss += camLoss.cpu().item()
-        triplet_loss += triplet.cpu().item() 
         ranked_loss += rankedLoss.cpu().item() * 0.5
-        loss += cross + rankedLoss * 0.5 + camLoss
+        loss += cross + camLoss + rankedLoss * 0.5
         copy_preds = Variable(preds.clone(), requires_grad=False)
         copy_preds = copy_preds.cpu().numpy()
         target = target.cpu().numpy()[:preds.size(0)]
@@ -133,23 +131,20 @@ for epoch in range(1, epochs + 1):
             loss /= BATCH_SIZE
             cross_loss /= BATCH_SIZE
             cam_loss /= BATCH_SIZE
-            triplet_loss /= BATCH_SIZE
             ranked_loss /= BATCH_SIZE
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             cross_loss_list.append(cross_loss)
             cam_loss_list.append(cam_loss)
-            triplet_loss_list.append(triplet_loss)
             ranked_loss_list.append(ranked_loss)
             _ap = total_ap / BATCH_SIZE
             ap_list.append(_ap)
             
-            pbar.set_description("Epoch {}, Cam={:.4f}, Cross={:.4f}, Triplet={:.4f}, RankedLoss={:.4f}, Ap={:.2f}%".format(epoch, cam_loss, cross_loss, triplet_loss, ranked_loss, _ap))
+            pbar.set_description("Epoch {}, Cam={:.4f}, Cross={:.4f}, RankedLoss={:.4f}, Ap={:.2f}%".format(epoch, cam_loss, cross_loss, ranked_loss, _ap))
             pbar.update()
             loss = 0.
             cross_loss = 0.
-            triplet_loss = 0.
             cam_loss = 0.
             ranked_loss = 0.
             total_ap = 0.
@@ -160,12 +155,11 @@ for epoch in range(1, epochs + 1):
     _map = np.array(ap_list).mean()
     avg_cam = np.array(cam_loss_list).mean()
     avg_cross = np.array(cross_loss_list).mean()
-    avg_triplet = np.array(triplet_loss_list).mean()
     avg_rankedloss = np.array(ranked_loss_list).mean()
     easy_valid_map, easy_valid_loss = validation(model, easy_valid_dataset)
     hard_valid_map, hard_valid_loss = validation(model, hard_valid_dataset)
     torch.save(model.state_dict(), os.path.join(OUTPUT_PATH, f"{output_file_name}_{epoch}.pth"))
     pbar.close()
-    # scheduler.step()
-    print("Epoch {}, Avg_Cam={:.4f}, Avg_Triplet={:.4f}, Avg_Cross={:.4f}, Avg_RankedLoss={:.4f}, Map={:.2f}%\nEasy_Valid_Map={:.2f}%, Easy_Valid_Loss={:.4f}, Hard_Valid_Map={:.2f}%, Hard_Valid_Loss={:.4f}".format(epoch, avg_cam, avg_triplet, avg_cross, avg_rankedloss, _map, easy_valid_map, easy_valid_loss, hard_valid_map, hard_valid_loss))
+    scheduler.step()
+    print("Epoch {}, Avg_Cam={:.4f}, Avg_Cross={:.4f}, Avg_RankedLoss={:.4f}, Map={:.2f}%\nEasy_Valid_Map={:.2f}%, Easy_Valid_Loss={:.4f}, Hard_Valid_Map={:.2f}%, Hard_Valid_Loss={:.4f}".format(epoch, avg_cam, avg_cross, avg_rankedloss, _map, easy_valid_map, easy_valid_loss, hard_valid_map, hard_valid_loss))
     
